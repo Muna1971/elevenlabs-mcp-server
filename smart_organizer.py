@@ -216,6 +216,17 @@ def get_desktop_path() -> Path:
     home = Path.home()
 
     if os.name == 'nt':
+        # التحقق من OneDrive أولاً (Windows)
+        onedrive_paths = [
+            home / "OneDrive" / "Desktop",
+            home / "OneDrive" / "سطح المكتب",
+            home / "OneDrive - Personal" / "Desktop",
+        ]
+        for path in onedrive_paths:
+            if path.exists():
+                return path
+
+        # المسار العادي
         desktop = home / "Desktop"
         if not desktop.exists():
             desktop = home / "سطح المكتب"

@@ -218,6 +218,8 @@ def get_desktop_path() -> Path:
     if os.name == 'nt':
         # التحقق من OneDrive أولاً (Windows)
         onedrive_paths = [
+            home / "OneDrive - Mohamed Bin Zayed University for Humanities" / "Desktop",
+            home / "OneDrive - Mohamed Bin Zayed University for Humanities" / "سطح المكتب",
             home / "OneDrive" / "Desktop",
             home / "OneDrive" / "سطح المكتب",
             home / "OneDrive - Personal" / "Desktop",

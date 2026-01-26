@@ -257,15 +257,18 @@ def move_file(file_path: Path, destination_folder: Path) -> Path:
     return destination
 
 
-def organize_desktop(dry_run: bool = True):
-    """تنظيم ملفات سطح المكتب"""
-    desktop = get_desktop_path()
+def organize_desktop(dry_run: bool = True, custom_path: str = None):
+    """تنظيم ملفات المجلد المحدد"""
+    if custom_path:
+        desktop = Path(custom_path)
+    else:
+        desktop = get_desktop_path()
 
     if not desktop.exists():
-        print(f"❌ لم يتم العثور على سطح المكتب: {desktop}")
+        print(f"❌ لم يتم العثور على المجلد: {desktop}")
         return
 
-    print(f"📂 مسار سطح المكتب: {desktop}")
+    print(f"📂 مسار المجلد: {desktop}")
     print("=" * 60)
 
     # التحقق من المكتبات المتاحة
@@ -349,9 +352,15 @@ def organize_desktop(dry_run: bool = True):
 
 if __name__ == "__main__":
     import sys
+    import argparse
+
+    parser = argparse.ArgumentParser(description='أداة التنظيم الذكي للملفات')
+    parser.add_argument('--run', action='store_true', help='تنفيذ التنظيم فعلياً')
+    parser.add_argument('--path', type=str, help='مسار المجلد المراد تنظيمه')
+    args = parser.parse_args()
 
     print("\n" + "=" * 60)
-    print("🧠 أداة التنظيم الذكي لسطح المكتب")
+    print("🧠 أداة التنظيم الذكي للملفات")
     print("=" * 60)
     print("""
 📁 التصنيفات:
@@ -369,9 +378,14 @@ if __name__ == "__main__":
    └── AIGO Center (الذكاء الاصطناعي والبزنس)
     """)
 
-    if len(sys.argv) > 1 and sys.argv[1] == "--run":
+    if args.run:
         print("⚡ جاري تنظيم الملفات...\n")
-        organize_desktop(dry_run=False)
+        organize_desktop(dry_run=False, custom_path=args.path)
     else:
         print("🔍 عرض تجريبي:\n")
-        organize_desktop(dry_run=True)
+        organize_desktop(dry_run=True, custom_path=args.path)
+        print("\n💡 لتنفيذ التنظيم فعلياً:")
+        if args.path:
+            print(f'   python smart_organizer.py --path "{args.path}" --run')
+        else:
+            print("   python smart_organizer.py --run")

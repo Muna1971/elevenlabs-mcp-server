@@ -1,0 +1,27 @@
+{
+  "name": "mitrash",
+  "version": "0.1.0",
+  "description": "مطراش — تطبيق مراسلات إماراتي محلي بهوية أصيلة",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [
+    "messaging",
+    "chat",
+    "uae",
+    "arabic",
+    "websocket",
+    "mitrash"
+  ],
+  "author": "Mitrash Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

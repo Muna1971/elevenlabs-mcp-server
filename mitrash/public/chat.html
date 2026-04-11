@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مطراش — المحادثات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="chat-page">
+  <header class="chat-header">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+        <circle cx="20" cy="20" r="18" fill="none" stroke="#C9A961" stroke-width="2"/>
+        <text x="20" y="28" text-anchor="middle" font-family="Amiri, serif" font-size="24" font-weight="700" fill="#C9A961">م</text>
+      </svg>
+      <h1>مطراش</h1>
+    </div>
+
+    <div class="connection-status" id="connection-status">
+      <span class="status-indicator" id="status-indicator"></span>
+      <span id="status-text">جاري الاتصال...</span>
+    </div>
+
+    <div class="user-info">
+      <span class="username" id="current-user">—</span>
+      <div class="avatar" id="current-user-avatar">؟</div>
+      <button id="logout-btn" class="logout-btn" title="تسجيل خروج">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="chat-main">
+    <aside class="users-sidebar">
+      <div class="sidebar-section">
+        <h2>المتصلون الآن <span class="count" id="online-count">0</span></h2>
+        <div id="online-users-list" class="users-list">
+          <p class="empty-sidebar">لا يوجد مستخدمون متصلون</p>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>المحادثات السابقة</h2>
+        <div id="history-users-list" class="users-list"></div>
+      </div>
+    </aside>
+
+    <section class="chat-area">
+      <div class="chat-area-header" id="chat-area-header">
+        <div class="selected-user-info">
+          <div class="avatar-large" id="selected-user-avatar">—</div>
+          <div>
+            <h2 id="chat-title">اختر محادثة للبدء</h2>
+            <p class="selected-user-status" id="selected-user-status"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="messages-container">
+        <div class="empty-state">
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <h3>ابدأ محادثة جديدة</h3>
+          <p>اختر مستخدماً من القائمة الجانبية لبدء المحادثة</p>
+        </div>
+      </div>
+
+      <form class="chat-input-form" id="chat-input-form">
+        <input
+          type="text"
+          id="message-input"
+          placeholder="اكتب رسالتك هنا..."
+          maxlength="2000"
+          autocomplete="off"
+          disabled
+        >
+        <button type="submit" id="send-btn" disabled title="إرسال">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/chat.js"></script>
+</body>
+</html>

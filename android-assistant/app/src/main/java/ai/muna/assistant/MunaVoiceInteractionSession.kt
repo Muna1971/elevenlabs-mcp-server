@@ -13,7 +13,7 @@ class MunaVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        val intent = Intent(context, MainActivity::class.java).apply {
+        val intent = Intent(context, AssistActivity::class.java).apply {
             action = Intent.ACTION_ASSIST
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }

@@ -20,12 +20,17 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    /** Reason for the last failed synthesis (for diagnostics), or null. */
+    var lastError: String? = null
+        private set
+
     fun hasKey(): Boolean = prefs.elevenKey.isNotBlank()
 
     /** Synchronous — call from a background dispatcher. Returns null on failure. */
     fun synthesize(text: String): File? {
+        lastError = null
         val key = prefs.elevenKey
-        if (key.isBlank() || text.isBlank()) return null
+        if (key.isBlank() || text.isBlank()) { lastError = "لا يوجد مفتاح صوت"; return null }
 
         val body = JSONObject()
             .put("text", text)
@@ -46,13 +51,20 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
 
         return try {
             http.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return null
+                if (!resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
+                    lastError = runCatching {
+                        org.json.JSONObject(body).getJSONObject("detail").getString("message")
+                    }.getOrNull() ?: "HTTP ${resp.code}"
+                    return null
+                }
                 val bytes = resp.body?.bytes() ?: return null
                 val out = File(cacheDir, "muna_reply.mp3")
                 out.writeBytes(bytes)
                 out
             }
         } catch (e: IOException) {
+            lastError = e.message ?: "خطأ في الشبكة"
             null
         }
     }

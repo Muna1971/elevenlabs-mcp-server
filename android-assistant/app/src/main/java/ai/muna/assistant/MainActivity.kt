@@ -32,6 +32,15 @@ class MainActivity : AppCompatActivity() {
     private val convo = mutableListOf<Message>()
     private lateinit var adapter: ChatAdapter
 
+    private lateinit var history: HistoryStore
+    private var sessionId: Long = 0L
+
+    private val historyLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val id = result.data?.getLongExtra("session_id", 0L) ?: 0L
+            if (id != 0L) loadSession(id)
+        }
+
     private var recognizer: SpeechRecognizer? = null
     private var player: MediaPlayer? = null
     private var busy = false
@@ -63,6 +72,7 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         claude = ClaudeClient(prefs)
         eleven = ElevenLabsClient(prefs, cacheDir)
+        history = HistoryStore(this)
 
         adapter = ChatAdapter(mutableListOf())
         binding.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
@@ -86,7 +96,10 @@ class MainActivity : AppCompatActivity() {
         binding.navSettings.setOnClickListener { openSettings() }
         binding.navNew.setOnClickListener { newConversation() }
         binding.navMeeting.setOnClickListener { toggleMeeting() }
-        binding.navHistory.setOnClickListener { toast(getString(R.string.coming_soon)) }
+        binding.navHistory.setOnClickListener {
+            saveCurrent()
+            historyLauncher.launch(Intent(this, HistoryActivity::class.java))
+        }
         binding.btnStopMeeting.setOnClickListener { stopMeeting() }
 
         val action = intent?.action
@@ -112,10 +125,32 @@ class MainActivity : AppCompatActivity() {
 
     private fun newConversation() {
         if (meetingActive) stopMeetingListeningOnly()
+        saveCurrent()
         stopPlayback()
         convo.clear()
         adapter.clear()
+        sessionId = 0L
         showHome()
+    }
+
+    // ---- History ----
+
+    private fun saveCurrent() {
+        if (convo.isEmpty()) return
+        if (sessionId == 0L) sessionId = System.currentTimeMillis()
+        history.save(sessionId, convo)
+    }
+
+    private fun loadSession(id: Long) {
+        val session = history.load().firstOrNull { it.id == id } ?: return
+        stopPlayback()
+        convo.clear()
+        convo.addAll(session.messages)
+        adapter.clear()
+        for (m in session.messages) adapter.add(m)
+        sessionId = id
+        showChat()
+        scrollDown()
     }
 
     // ---- Sending ----
@@ -135,8 +170,18 @@ class MainActivity : AppCompatActivity() {
         stopPlayback()
         showChat()
         adapter.add(Message("user", text))
-        convo.add(Message("user", text))
         scrollDown()
+
+        // Device commands (open app, maps, call, reminder, search) run locally.
+        val cmd = Commands.handle(this, text)
+        if (cmd != null) {
+            adapter.add(Message("assistant", cmd))
+            scrollDown()
+            speak(cmd)
+            return
+        }
+
+        convo.add(Message("user", text))
         runCompletion()
     }
 
@@ -157,6 +202,7 @@ class MainActivity : AppCompatActivity() {
             convo.add(Message("assistant", reply))
             adapter.add(Message("assistant", reply))
             scrollDown()
+            saveCurrent()
             speak(reply)
         }
     }
@@ -343,6 +389,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    override fun onStop() {
+        super.onStop()
+        saveCurrent()
+    }
 
     override fun onDestroy() {
         super.onDestroy()

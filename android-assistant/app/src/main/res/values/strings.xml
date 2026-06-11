@@ -43,6 +43,7 @@
     <string name="listening">أستمع إليك…</string>
     <string name="thinking">أفكّر…</string>
     <string name="speaking">أتحدّث…</string>
+    <string name="assist_tap">انقري للتحدّث</string>
     <string name="coming_soon">هذه الميزة ستتوفر قريبًا</string>
 
     <string name="need_anthropic_key">من فضلك أدخل مفتاح Anthropic في الإعدادات أولاً.</string>

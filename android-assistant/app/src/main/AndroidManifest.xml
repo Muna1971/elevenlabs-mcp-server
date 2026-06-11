@@ -29,8 +29,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!-- Legacy assist activity (kept for compatibility) -->
+        <!-- Voice orb shown on the assist gesture -->
+        <activity
+            android:name=".AssistActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Muna.Assist">
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -45,6 +53,12 @@
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false"
+            android:label="@string/nav_history"
             android:parentActivityName=".MainActivity" />
 
         <!-- ===== Digital assistant (VoiceInteractionService) ===== -->

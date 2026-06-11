@@ -3,70 +3,288 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:layoutDirection="rtl"
+    android:background="@color/cream"
     android:orientation="vertical">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/toolbar"
+    <!-- ===== Header ===== -->
+    <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/brand"
-        app:title="@string/app_name"
-        app:titleTextColor="@color/white" />
+        android:layout_height="wrap_content"
+        android:background="@color/navy"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="14dp">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler"
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/avatar"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:scaleType="centerCrop"
+            android:src="@drawable/avatar"
+            app:shapeAppearanceOverlay="@style/CircleImage"
+            app:strokeColor="@color/accent"
+            app:strokeWidth="2dp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@id/avatar"
+            android:layout_marginEnd="12dp"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/header_title"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:layout_width="7dp"
+                    android:layout_height="7dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/dot_accent" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/header_subtitle"
+                    android:textColor="#C9D0DE"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- ===== Content (home or chat) ===== -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:padding="12dp" />
+        android:layout_weight="1">
 
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/homeView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:padding="20dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/circle_white"
+                    android:gravity="center"
+                    android:text="👋"
+                    android:textSize="28sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/home_greeting"
+                    android:textColor="@color/navy"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/home_question"
+                    android:textColor="@color/text_muted"
+                    android:textSize="15sp" />
+
+                <!-- Row 1 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="22dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardMeeting"
+                        style="@style/HomeCard"
+                        android:layout_marginEnd="6dp">
+
+                        <LinearLayout style="@style/HomeCardBody">
+                            <TextView style="@style/HomeCardIcon" android:text="📅" />
+                            <TextView style="@style/HomeCardTitle" android:text="@string/card_meeting" />
+                            <TextView style="@style/HomeCardSub" android:text="@string/card_meeting_sub" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardMessage"
+                        style="@style/HomeCard"
+                        android:layout_marginStart="6dp">
+
+                        <LinearLayout style="@style/HomeCardBody">
+                            <TextView style="@style/HomeCardIcon" android:text="✉️" />
+                            <TextView style="@style/HomeCardTitle" android:text="@string/card_message" />
+                            <TextView style="@style/HomeCardSub" android:text="@string/card_message_sub" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
+
+                <!-- Row 2 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardAcademic"
+                        style="@style/HomeCard"
+                        android:layout_marginEnd="6dp">
+
+                        <LinearLayout style="@style/HomeCardBody">
+                            <TextView style="@style/HomeCardIcon" android:text="🎓" />
+                            <TextView style="@style/HomeCardTitle" android:text="@string/card_academic" />
+                            <TextView style="@style/HomeCardSub" android:text="@string/card_academic_sub" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardPresent"
+                        style="@style/HomeCard"
+                        android:layout_marginStart="6dp">
+
+                        <LinearLayout style="@style/HomeCardBody">
+                            <TextView style="@style/HomeCardIcon" android:text="📊" />
+                            <TextView style="@style/HomeCardTitle" android:text="@string/card_present" />
+                            <TextView style="@style/HomeCardSub" android:text="@string/card_present_sub" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:padding="12dp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <!-- ===== Status line ===== -->
     <TextView
         android:id="@+id/status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:paddingBottom="4dp"
-        android:textColor="@color/brand"
+        android:paddingVertical="4dp"
+        android:textColor="@color/accent"
         android:textStyle="italic"
         android:visibility="gone" />
 
+    <!-- ===== Input bar ===== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/surface"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="8dp">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/input"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:background="@drawable/bubble_bot"
-            android:hint="@string/hint_message"
-            android:maxLines="4"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="12dp" />
+            android:background="@drawable/bg_input"
+            android:gravity="center_vertical"
+            android:minHeight="52dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:hint="@string/input_hint"
+                android:maxLines="4"
+                android:paddingHorizontal="8dp"
+                android:textColor="@color/text_dark" />
+
+            <ImageButton
+                android:id="@+id/btnMic"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_mic"
+                android:src="@drawable/ic_mic_dark" />
+
+            <ImageButton
+                android:id="@+id/btnAttach"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_attach"
+                android:src="@drawable/ic_attach" />
+        </LinearLayout>
 
         <ImageButton
             android:id="@+id/btnSend"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="6dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_send_circle"
             android:contentDescription="@string/action_send"
-            android:src="@drawable/ic_send" />
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btnMic"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="6dp"
-            android:contentDescription="@string/action_mic"
-            android:src="@drawable/ic_mic"
-            app:backgroundTint="@color/brand"
-            app:tint="@color/white" />
+            android:src="@drawable/ic_send_white" />
     </LinearLayout>
+
+    <!-- ===== Bottom bar ===== -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/surface"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp">
+
+            <TextView
+                android:id="@+id/connStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:drawablePadding="6dp"
+                android:text="@string/nav_status"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                app:drawableStartCompat="@drawable/dot_online" />
+
+            <TextView android:id="@+id/navMeeting" style="@style/NavItem" android:text="🎧 وضع الاجتماع" />
+            <TextView android:id="@+id/navNew" style="@style/NavItem" android:text="↻ محادثة جديدة" />
+            <TextView android:id="@+id/navHistory" style="@style/NavItem" android:text="🕐 السجل" />
+            <TextView android:id="@+id/navSettings" style="@style/NavItem" android:text="⚙ الإعدادات" />
+        </LinearLayout>
+    </HorizontalScrollView>
 </LinearLayout>

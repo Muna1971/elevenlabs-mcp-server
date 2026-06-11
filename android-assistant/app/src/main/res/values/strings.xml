@@ -3,17 +3,47 @@
     <string name="app_name">منى الذكية</string>
     <string name="settings_title">الإعدادات</string>
 
-    <string name="hint_message">اكتب رسالتك…</string>
+    <!-- Header -->
+    <string name="header_title">منى الكندي</string>
+    <string name="header_subtitle">المساعدة التنفيذية الذكية</string>
+
+    <!-- Home / welcome -->
+    <string name="home_greeting">مرحبًا، أنا منى</string>
+    <string name="home_question">كيف يمكنني مساعدتك اليوم؟</string>
+
+    <string name="card_meeting">اجتماع</string>
+    <string name="card_meeting_sub">تنظيم وجدولة</string>
+    <string name="card_message">رسالة</string>
+    <string name="card_message_sub">صياغة رسائل رسمية</string>
+    <string name="card_academic">عمل أكاديمي</string>
+    <string name="card_academic_sub">بحث، تلخيص، مراجعة</string>
+    <string name="card_present">عرض AIGO</string>
+    <string name="card_present_sub">إعداد عرض احترافي</string>
+
+    <!-- Starter prompts -->
+    <string name="prompt_meeting">ساعديني في تنظيم وجدولة اجتماع. اسأليني عن التفاصيل اللازمة.</string>
+    <string name="prompt_message">ساعديني في صياغة رسالة رسمية. اسأليني عن الموضوع والمستلم.</string>
+    <string name="prompt_academic">ساعديني في عمل أكاديمي (بحث أو تلخيص أو مراجعة). اسأليني عن المطلوب.</string>
+    <string name="prompt_present">ساعديني في إعداد عرض تقديمي احترافي. اسأليني عن الموضوع والنقاط.</string>
+
+    <!-- Input -->
+    <string name="input_hint">اكتب طلبك هنا…</string>
     <string name="action_send">إرسال</string>
     <string name="action_mic">تحدّث</string>
-    <string name="action_settings">الإعدادات</string>
-    <string name="action_clear">محادثة جديدة</string>
+    <string name="action_attach">إرفاق</string>
 
+    <!-- Bottom bar -->
+    <string name="nav_status">متصل وجاهز للمساعدة</string>
+    <string name="nav_meeting_mode">وضع الاجتماع</string>
+    <string name="nav_new">محادثة جديدة</string>
+    <string name="nav_history">السجل</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Status / messages -->
     <string name="listening">أستمع إليك…</string>
     <string name="thinking">أفكّر…</string>
     <string name="speaking">أتحدّث…</string>
-
-    <string name="greeting">مرحباً، أنا منى الذكية مساعدتك الشخصية. كيف أقدر أساعدك اليوم؟</string>
+    <string name="coming_soon">هذه الميزة ستتوفر قريبًا</string>
 
     <string name="need_anthropic_key">من فضلك أدخل مفتاح Anthropic في الإعدادات أولاً.</string>
     <string name="mic_permission_needed">أحتاج إذن الميكروفون لأستمع إليك.</string>

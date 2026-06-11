@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -50,13 +51,12 @@ class MainActivity : AppCompatActivity() {
         claude = ClaudeClient(prefs)
         eleven = ElevenLabsClient(prefs, cacheDir)
 
-        setSupportActionBar(binding.toolbar)
-
         adapter = ChatAdapter(mutableListOf())
         binding.recycler.layoutManager = LinearLayoutManager(this).apply { stackFromEnd = true }
         binding.recycler.adapter = adapter
-        adapter.add(Message("assistant", getString(R.string.greeting)))
+        showHome()
 
+        // Input
         binding.btnSend.setOnClickListener { sendTyped() }
         binding.input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -64,12 +64,44 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
         binding.btnMic.setOnClickListener { onMicTapped() }
+        binding.btnAttach.setOnClickListener { toast(getString(R.string.coming_soon)) }
+
+        // Home cards
+        binding.cardMeeting.setOnClickListener { send(getString(R.string.prompt_meeting)) }
+        binding.cardMessage.setOnClickListener { send(getString(R.string.prompt_message)) }
+        binding.cardAcademic.setOnClickListener { send(getString(R.string.prompt_academic)) }
+        binding.cardPresent.setOnClickListener { send(getString(R.string.prompt_present)) }
+
+        // Bottom bar
+        binding.navSettings.setOnClickListener { openSettings() }
+        binding.navNew.setOnClickListener { newConversation() }
+        binding.navMeeting.setOnClickListener { toast(getString(R.string.coming_soon)) }
+        binding.navHistory.setOnClickListener { toast(getString(R.string.coming_soon)) }
 
         // Auto-listen when launched as the device assistant.
         val action = intent?.action
         if (action == Intent.ACTION_ASSIST || action == "android.intent.action.VOICE_ASSIST") {
-            binding.recycler.post { onMicTapped() }
+            binding.root.post { onMicTapped() }
         }
+    }
+
+    // ---- View state ----
+
+    private fun showHome() {
+        binding.homeView.visibility = View.VISIBLE
+        binding.recycler.visibility = View.GONE
+    }
+
+    private fun showChat() {
+        binding.homeView.visibility = View.GONE
+        binding.recycler.visibility = View.VISIBLE
+    }
+
+    private fun newConversation() {
+        stopPlayback()
+        convo.clear()
+        adapter.clear()
+        showHome()
     }
 
     // ---- Sending ----
@@ -89,6 +121,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         stopPlayback()
+        showChat()
         adapter.add(Message("user", text))
         convo.add(Message("user", text))
         scrollDown()
@@ -174,9 +207,7 @@ class MainActivity : AppCompatActivity() {
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onError(error: Int) {
-            setStatus(null)
-        }
+        override fun onError(error: Int) { setStatus(null) }
 
         override fun onResults(results: Bundle?) {
             setStatus(null)
@@ -189,29 +220,9 @@ class MainActivity : AppCompatActivity() {
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    // ---- Menu ----
-
-    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
-        menuInflater.inflate(R.menu.main_menu, menu)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_settings -> { openSettings(); true }
-            R.id.action_clear -> {
-                convo.clear()
-                adapter.clear()
-                adapter.add(Message("assistant", getString(R.string.greeting)))
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
+    // ---- Helpers ----
 
     private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
-
-    // ---- Helpers ----
 
     private fun scrollDown() = binding.recycler.post {
         binding.recycler.scrollToPosition(adapter.itemCount - 1)
@@ -219,7 +230,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setStatus(text: String?) {
         binding.status.text = text ?: ""
-        binding.status.visibility = if (text == null) android.view.View.GONE else android.view.View.VISIBLE
+        binding.status.visibility = if (text == null) View.GONE else View.VISIBLE
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()

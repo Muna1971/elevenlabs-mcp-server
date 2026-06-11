@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مُنى</string>
+    <string name="settings_title">الإعدادات</string>
+
+    <string name="hint_message">اكتب رسالتك…</string>
+    <string name="action_send">إرسال</string>
+    <string name="action_mic">تحدّث</string>
+    <string name="action_settings">الإعدادات</string>
+    <string name="action_clear">محادثة جديدة</string>
+
+    <string name="listening">أستمع إليك…</string>
+    <string name="thinking">أفكّر…</string>
+    <string name="speaking">أتحدّث…</string>
+
+    <string name="greeting">مرحباً، أنا مُنى مساعدتك الذكية. كيف أقدر أساعدك اليوم؟</string>
+
+    <string name="need_anthropic_key">من فضلك أدخل مفتاح Anthropic في الإعدادات أولاً.</string>
+    <string name="mic_permission_needed">أحتاج إذن الميكروفون لأستمع إليك.</string>
+    <string name="speech_unavailable">التعرّف على الكلام غير متاح على هذا الجهاز.</string>
+
+    <!-- Settings labels -->
+    <string name="label_anthropic_key">مفتاح Anthropic (Claude) — العقل</string>
+    <string name="hint_anthropic_key">sk-ant-…</string>
+    <string name="label_eleven_key">مفتاح ElevenLabs — الصوت (اختياري)</string>
+    <string name="hint_eleven_key">مفتاح ElevenLabs</string>
+    <string name="label_voice_id">معرّف الصوت في ElevenLabs</string>
+    <string name="hint_voice_id">مثال: 21m00Tcm4TlvDq8ikWAM</string>
+    <string name="label_persona_name">اسم الشخصية</string>
+    <string name="label_persona">شخصية المساعد (التعليمات)</string>
+    <string name="label_speak">نطق الردود بالصوت</string>
+    <string name="action_save">حفظ</string>
+    <string name="saved">تم الحفظ</string>
+</resources>

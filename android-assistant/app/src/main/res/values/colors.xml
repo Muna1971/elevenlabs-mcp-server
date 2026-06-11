@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand">#6C4DF6</color>
+    <color name="brand_dark">#4A32B5</color>
+    <color name="brand_light">#EDE8FF</color>
+    <color name="bg">#FFFBFE</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="bubble_user">#6C4DF6</color>
+    <color name="bubble_user_text">#FFFFFF</color>
+    <color name="bubble_bot">#F1EDFA</color>
+    <color name="bubble_bot_text">#1C1B1F</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

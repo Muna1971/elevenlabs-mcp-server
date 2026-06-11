@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Speech bubble -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,34h40a8,8 0 0 1 8,8v22a8,8 0 0 1 -8,8h-20l-12,11v-11h-8a8,8 0 0 1 -8,-8v-22a8,8 0 0 1 8,-8z" />
+    <!-- Sparkle / spark of intelligence -->
+    <path
+        android:fillColor="#6C4DF6"
+        android:pathData="M54,46l3.2,7.8l7.8,3.2l-7.8,3.2l-3.2,7.8l-3.2,-7.8l-7.8,-3.2l7.8,-3.2z" />
+</vector>

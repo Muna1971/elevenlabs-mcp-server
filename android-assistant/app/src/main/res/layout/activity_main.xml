@@ -67,6 +67,36 @@
         </LinearLayout>
     </RelativeLayout>
 
+    <!-- ===== Meeting mode banner ===== -->
+    <LinearLayout
+        android:id="@+id/meetingBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/navy_dark"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/meetingText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🔴 وضع الاجتماع — يسجّل…"
+            android:textColor="@color/white"
+            android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnStopMeeting"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="إيقاف وتلخيص"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <!-- ===== Content (home or chat) ===== -->
     <FrameLayout
         android:layout_width="match_parent"

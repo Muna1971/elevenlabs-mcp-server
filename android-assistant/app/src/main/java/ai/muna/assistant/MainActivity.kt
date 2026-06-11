@@ -36,11 +36,24 @@ class MainActivity : AppCompatActivity() {
     private var player: MediaPlayer? = null
     private var busy = false
 
+    // Meeting mode
+    private var meetingActive = false
+    private var meetingRecognizer: SpeechRecognizer? = null
+    private val transcript = StringBuilder()
+
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) startListening()
-            else toast(getString(R.string.mic_permission_needed))
+            if (granted) startListening() else toast(getString(R.string.mic_permission_needed))
         }
+
+    private val meetingPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) beginMeeting() else toast(getString(R.string.mic_permission_needed))
+        }
+
+    // First-run permission prompt (no auto-action)
+    private val initialPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,7 +69,6 @@ class MainActivity : AppCompatActivity() {
         binding.recycler.adapter = adapter
         showHome()
 
-        // Input
         binding.btnSend.setOnClickListener { sendTyped() }
         binding.input.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -66,22 +78,23 @@ class MainActivity : AppCompatActivity() {
         binding.btnMic.setOnClickListener { onMicTapped() }
         binding.btnAttach.setOnClickListener { toast(getString(R.string.coming_soon)) }
 
-        // Home cards
         binding.cardMeeting.setOnClickListener { send(getString(R.string.prompt_meeting)) }
         binding.cardMessage.setOnClickListener { send(getString(R.string.prompt_message)) }
         binding.cardAcademic.setOnClickListener { send(getString(R.string.prompt_academic)) }
         binding.cardPresent.setOnClickListener { send(getString(R.string.prompt_present)) }
 
-        // Bottom bar
         binding.navSettings.setOnClickListener { openSettings() }
         binding.navNew.setOnClickListener { newConversation() }
-        binding.navMeeting.setOnClickListener { toast(getString(R.string.coming_soon)) }
+        binding.navMeeting.setOnClickListener { toggleMeeting() }
         binding.navHistory.setOnClickListener { toast(getString(R.string.coming_soon)) }
+        binding.btnStopMeeting.setOnClickListener { stopMeeting() }
 
-        // Auto-listen when launched as the device assistant.
         val action = intent?.action
         if (action == Intent.ACTION_ASSIST || action == "android.intent.action.VOICE_ASSIST") {
             binding.root.post { onMicTapped() }
+        } else if (!hasMic()) {
+            // Ask for the microphone permission on first open.
+            initialPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -98,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun newConversation() {
+        if (meetingActive) stopMeetingListeningOnly()
         stopPlayback()
         convo.clear()
         adapter.clear()
@@ -116,18 +130,20 @@ class MainActivity : AppCompatActivity() {
     private fun send(text: String) {
         if (busy) return
         if (prefs.anthropicKey.isBlank()) {
-            toast(getString(R.string.need_anthropic_key))
-            openSettings()
-            return
+            toast(getString(R.string.need_anthropic_key)); openSettings(); return
         }
         stopPlayback()
         showChat()
         adapter.add(Message("user", text))
         convo.add(Message("user", text))
         scrollDown()
+        runCompletion()
+    }
+
+    /** Shared call to the model for whatever is currently in [convo]. */
+    private fun runCompletion() {
         setStatus(getString(R.string.thinking))
         busy = true
-
         lifecycleScope.launch {
             val reply = try {
                 withContext(Dispatchers.IO) { claude.complete(convo) }
@@ -152,17 +168,12 @@ class MainActivity : AppCompatActivity() {
         setStatus(getString(R.string.speaking))
         lifecycleScope.launch {
             val file = withContext(Dispatchers.IO) { eleven.synthesize(text) }
-            if (file == null) {
-                setStatus(null)
-                return@launch
-            }
+            if (file == null) { setStatus(null); return@launch }
             stopPlayback()
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 setOnCompletionListener {
-                    setStatus(null)
-                    it.release()
-                    if (player === it) player = null
+                    setStatus(null); it.release(); if (player === it) player = null
                 }
                 setOnPreparedListener { it.start() }
                 prepareAsync()
@@ -175,12 +186,15 @@ class MainActivity : AppCompatActivity() {
         player = null
     }
 
-    // ---- Voice input (Android SpeechRecognizer) ----
+    // ---- Voice input (single shot) ----
+
+    private fun hasMic() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
 
     private fun onMicTapped() {
-        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        if (meetingActive) { toast(getString(R.string.coming_soon)); return }
+        if (hasMic()) startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     private fun startListening() {
@@ -192,14 +206,16 @@ class MainActivity : AppCompatActivity() {
         recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
             setRecognitionListener(listener)
         }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        setStatus(getString(R.string.listening))
+        recognizer?.startListening(recognizeIntent())
+    }
+
+    private fun recognizeIntent(): Intent =
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
         }
-        setStatus(getString(R.string.listening))
-        recognizer?.startListening(intent)
-    }
 
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {}
@@ -208,16 +224,109 @@ class MainActivity : AppCompatActivity() {
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onError(error: Int) { setStatus(null) }
-
         override fun onResults(results: Bundle?) {
             setStatus(null)
-            val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val spoken = list?.firstOrNull()?.trim().orEmpty()
+            val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
             if (spoken.isNotEmpty()) send(spoken)
         }
-
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    // ---- Meeting mode (continuous capture + summary) ----
+
+    private fun toggleMeeting() {
+        if (meetingActive) stopMeeting() else startMeeting()
+    }
+
+    private fun startMeeting() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            toast(getString(R.string.speech_unavailable)); return
+        }
+        if (hasMic()) beginMeeting() else meetingPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    private fun beginMeeting() {
+        stopPlayback()
+        recognizer?.destroy(); recognizer = null
+        meetingActive = true
+        transcript.setLength(0)
+        binding.meetingBanner.visibility = View.VISIBLE
+        updateMeetingBanner()
+        startMeetingListening()
+    }
+
+    private fun startMeetingListening() {
+        if (!meetingActive) return
+        meetingRecognizer?.destroy()
+        meetingRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+            setRecognitionListener(meetingListener)
+        }
+        meetingRecognizer?.startListening(recognizeIntent())
+    }
+
+    private fun restartMeetingSoon() {
+        if (!meetingActive) return
+        binding.root.postDelayed({ startMeetingListening() }, 300)
+    }
+
+    private val meetingListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onError(error: Int) { restartMeetingSoon() }
+        override fun onResults(results: Bundle?) {
+            val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
+            if (spoken.isNotEmpty()) {
+                if (transcript.isNotEmpty()) transcript.append(' ')
+                transcript.append(spoken)
+                updateMeetingBanner()
+            }
+            restartMeetingSoon()
+        }
+        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    private fun updateMeetingBanner() {
+        val words = if (transcript.isBlank()) 0 else transcript.trim().split(Regex("\\s+")).size
+        binding.meetingText.text = "🔴 وضع الاجتماع — يسجّل…  ($words كلمة)"
+    }
+
+    private fun stopMeetingListeningOnly() {
+        meetingActive = false
+        meetingRecognizer?.destroy(); meetingRecognizer = null
+        binding.meetingBanner.visibility = View.GONE
+    }
+
+    private fun stopMeeting() {
+        val text = transcript.toString().trim()
+        stopMeetingListeningOnly()
+        if (text.isEmpty()) { toast("لم يُلتقط أي كلام"); return }
+        summarizeMeeting(text)
+    }
+
+    private fun summarizeMeeting(text: String) {
+        if (busy) return
+        if (prefs.anthropicKey.isBlank()) {
+            toast(getString(R.string.need_anthropic_key)); openSettings(); return
+        }
+        showChat()
+        adapter.add(Message("user", "📝 تلخيص الاجتماع"))
+        convo.add(
+            Message(
+                "user",
+                "فيما يلي تفريغ نصّي لاجتماع. لخّصه بإيجاز، ثم اذكر بوضوح: " +
+                    "أبرز النقاط، القرارات المتّخذة، والمهام (ومن المسؤول إن ذُكر، وأي مواعيد). " +
+                    "التفريغ:\n\n$text"
+            )
+        )
+        scrollDown()
+        runCompletion()
     }
 
     // ---- Helpers ----
@@ -239,5 +348,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         stopPlayback()
         recognizer?.destroy()
+        meetingRecognizer?.destroy()
     }
 }

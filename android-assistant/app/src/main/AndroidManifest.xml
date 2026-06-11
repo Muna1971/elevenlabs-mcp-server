@@ -4,7 +4,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- So the speech recognizer / assist resolves on Android 11+ -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
@@ -26,19 +25,16 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Normal launcher entry -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Makes the app selectable as the default digital assistant -->
+            <!-- Legacy assist activity (kept for compatibility) -->
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-
-            <!-- Voice search button / "search" assist trigger -->
             <intent-filter>
                 <action android:name="android.intent.action.VOICE_ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -51,5 +47,39 @@
             android:label="@string/settings_title"
             android:parentActivityName=".MainActivity" />
 
+        <!-- ===== Digital assistant (VoiceInteractionService) ===== -->
+        <!-- This is what makes the app selectable as the default device assistant. -->
+        <service
+            android:name=".MunaVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".MunaSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionSessionService" />
+            </intent-filter>
+        </service>
+
+        <!-- Stub recognition service required by the voice interaction metadata. -->
+        <service
+            android:name=".MunaRecognitionService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
     </application>
 </manifest>

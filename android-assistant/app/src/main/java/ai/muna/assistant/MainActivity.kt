@@ -3,8 +3,13 @@ package ai.muna.assistant
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -39,6 +44,15 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val id = result.data?.getLongExtra("session_id", 0L) ?: 0L
             if (id != 0L) loadSession(id)
+        }
+
+    // Image attachment (sent to the model as a vision block on the next message)
+    private var pendingImageB64: String? = null
+    private var imageForNextCompletion: String? = null
+
+    private val pickImage =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) loadImage(uri)
         }
 
     private var recognizer: SpeechRecognizer? = null
@@ -86,7 +100,7 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
         binding.btnMic.setOnClickListener { onMicTapped() }
-        binding.btnAttach.setOnClickListener { toast(getString(R.string.coming_soon)) }
+        binding.btnAttach.setOnClickListener { pickImage.launch("image/*") }
 
         binding.cardMeeting.setOnClickListener { send(getString(R.string.prompt_meeting)) }
         binding.cardMessage.setOnClickListener { send(getString(R.string.prompt_message)) }
@@ -156,7 +170,8 @@ class MainActivity : AppCompatActivity() {
     // ---- Sending ----
 
     private fun sendTyped() {
-        val text = binding.input.text?.toString()?.trim().orEmpty()
+        var text = binding.input.text?.toString()?.trim().orEmpty()
+        if (text.isEmpty() && pendingImageB64 != null) text = "صِفي هذه الصورة وأخبريني بما فيها."
         if (text.isEmpty()) return
         binding.input.setText("")
         send(text)
@@ -169,16 +184,22 @@ class MainActivity : AppCompatActivity() {
         }
         stopPlayback()
         showChat()
-        adapter.add(Message("user", text))
+        val hasImage = pendingImageB64 != null
+        adapter.add(Message("user", if (hasImage) "🖼️ $text" else text))
         scrollDown()
 
-        // Device commands (open app, maps, call, reminder, search) run locally.
-        val cmd = Commands.handle(this, text)
-        if (cmd != null) {
-            adapter.add(Message("assistant", cmd))
-            scrollDown()
-            speak(cmd)
-            return
+        // Device commands run locally (skipped when an image is attached).
+        if (!hasImage) {
+            val cmd = Commands.handle(this, text)
+            if (cmd != null) {
+                adapter.add(Message("assistant", cmd))
+                scrollDown()
+                speak(cmd)
+                return
+            }
+        } else {
+            imageForNextCompletion = pendingImageB64
+            pendingImageB64 = null
         }
 
         convo.add(Message("user", text))
@@ -189,9 +210,11 @@ class MainActivity : AppCompatActivity() {
     private fun runCompletion() {
         setStatus(getString(R.string.thinking))
         busy = true
+        val img = imageForNextCompletion
+        imageForNextCompletion = null
         lifecycleScope.launch {
             val reply = try {
-                withContext(Dispatchers.IO) { claude.complete(convo) }
+                withContext(Dispatchers.IO) { claude.complete(convo, img) }
             } catch (e: Exception) {
                 val msg = e.message ?: "خطأ غير معروف"
                 if (msg == "MISSING_ANTHROPIC_KEY") getString(R.string.need_anthropic_key)
@@ -376,6 +399,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---- Helpers ----
+
+    private fun loadImage(uri: Uri) {
+        try {
+            var bmp = contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it) }
+            if (bmp == null) { toast("تعذّر قراءة الصورة"); return }
+            val max = 1024
+            val w = bmp.width; val h = bmp.height
+            if (w > max || h > max) {
+                val scale = max.toFloat() / maxOf(w, h)
+                bmp = Bitmap.createScaledBitmap(bmp, (w * scale).toInt(), (h * scale).toInt(), true)
+            }
+            val baos = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+            pendingImageB64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+            toast("📎 تم إرفاق الصورة — اكتبي سؤالك عنها ثم أرسلي")
+        } catch (e: Exception) {
+            toast("تعذّر إرفاق الصورة")
+        }
+    }
 
     private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
 

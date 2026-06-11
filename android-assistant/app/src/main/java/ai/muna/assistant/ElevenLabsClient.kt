@@ -35,14 +35,10 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
         val body = JSONObject()
             .put("text", text)
             .put("model_id", "eleven_multilingual_v2")
-            .put(
-                "voice_settings",
-                JSONObject().put("stability", 0.5).put("similarity_boost", 0.75)
-            )
 
         val voiceId = prefs.voiceId.ifBlank { Prefs.DEFAULT_VOICE }
         val request = Request.Builder()
-            .url("https://api.elevenlabs.io/v1/text-to-speech/$voiceId?output_format=mp3_44100_128")
+            .url("https://api.elevenlabs.io/v1/text-to-speech/$voiceId")
             .header("xi-api-key", key)
             .header("accept", "audio/mpeg")
             .header("content-type", "application/json")
@@ -52,10 +48,12 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
         return try {
             http.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) {
-                    val body = resp.body?.string().orEmpty()
+                    val errBody = resp.body?.string().orEmpty()
                     lastError = runCatching {
-                        org.json.JSONObject(body).getJSONObject("detail").getString("message")
-                    }.getOrNull() ?: "HTTP ${resp.code}"
+                        val detail = org.json.JSONObject(errBody).get("detail")
+                        if (detail is org.json.JSONObject) detail.optString("message", detail.toString())
+                        else detail.toString()
+                    }.getOrNull()?.take(160) ?: "HTTP ${resp.code}"
                     return null
                 }
                 val bytes = resp.body?.bytes() ?: return null

@@ -25,13 +25,30 @@ class ClaudeClient(private val prefs: Prefs) {
      * Runs synchronously — call from a background dispatcher.
      */
     @Throws(IOException::class)
-    fun complete(history: List<Message>): String {
+    fun complete(
+        history: List<Message>,
+        imageB64: String? = null,
+        imageMime: String = "image/jpeg"
+    ): String {
         val key = prefs.anthropicKey
         if (key.isBlank()) throw IOException("MISSING_ANTHROPIC_KEY")
 
         val messages = JSONArray()
-        for (m in history) {
-            messages.put(JSONObject().put("role", m.role).put("content", m.text))
+        val lastIndex = history.size - 1
+        for ((i, m) in history.withIndex()) {
+            // Attach the image (if any) to the final user turn as a vision block.
+            if (i == lastIndex && m.role == "user" && imageB64 != null) {
+                val image = JSONObject().put("type", "image").put(
+                    "source",
+                    JSONObject().put("type", "base64")
+                        .put("media_type", imageMime).put("data", imageB64)
+                )
+                val textBlock = JSONObject().put("type", "text").put("text", m.text)
+                val content = JSONArray().put(image).put(textBlock)
+                messages.put(JSONObject().put("role", m.role).put("content", content))
+            } else {
+                messages.put(JSONObject().put("role", m.role).put("content", m.text))
+            }
         }
 
         val body = JSONObject()

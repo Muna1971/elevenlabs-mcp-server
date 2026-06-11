@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">مُنى</string>
+    <string name="app_name">منى الذكية</string>
     <string name="settings_title">الإعدادات</string>
 
     <string name="hint_message">اكتب رسالتك…</string>
@@ -13,7 +13,7 @@
     <string name="thinking">أفكّر…</string>
     <string name="speaking">أتحدّث…</string>
 
-    <string name="greeting">مرحباً، أنا مُنى مساعدتك الذكية. كيف أقدر أساعدك اليوم؟</string>
+    <string name="greeting">مرحباً، أنا منى الذكية مساعدتك الشخصية. كيف أقدر أساعدك اليوم؟</string>
 
     <string name="need_anthropic_key">من فضلك أدخل مفتاح Anthropic في الإعدادات أولاً.</string>
     <string name="mic_permission_needed">أحتاج إذن الميكروفون لأستمع إليك.</string>

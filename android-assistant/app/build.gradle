@@ -3,6 +3,16 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+import java.util.Properties
+
+// Personal API keys are read from secrets.properties (git-ignored) and baked
+// into BuildConfig. They are never committed to the repository.
+def secrets = new Properties()
+def secretsFile = rootProject.file("secrets.properties")
+if (secretsFile.exists()) {
+    secretsFile.withInputStream { secrets.load(it) }
+}
+
 android {
     namespace 'ai.muna.assistant'
     compileSdk 34
@@ -11,8 +21,12 @@ android {
         applicationId "ai.muna.assistant"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
+
+        buildConfigField "String", "ANTHROPIC_KEY", "\"${secrets.getProperty('ANTHROPIC_KEY', '')}\""
+        buildConfigField "String", "ELEVEN_KEY", "\"${secrets.getProperty('ELEVEN_KEY', '')}\""
+        buildConfigField "String", "VOICE_ID", "\"${secrets.getProperty('VOICE_ID', '')}\""
     }
 
     buildTypes {
@@ -31,6 +45,7 @@ android {
     }
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 

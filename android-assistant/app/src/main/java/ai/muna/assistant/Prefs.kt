@@ -30,16 +30,20 @@ class Prefs(context: Context) {
         }
     }
 
+    // Keys fall back to the values baked in at build time (BuildConfig) when the
+    // user hasn't entered their own in Settings.
     var anthropicKey: String
-        get() = sp.getString(KEY_ANTHROPIC, "") ?: ""
+        get() = (sp.getString(KEY_ANTHROPIC, "") ?: "").ifBlank { BuildConfig.ANTHROPIC_KEY }
         set(v) = sp.edit().putString(KEY_ANTHROPIC, v.trim()).apply()
 
     var elevenKey: String
-        get() = sp.getString(KEY_ELEVEN, "") ?: ""
+        get() = (sp.getString(KEY_ELEVEN, "") ?: "").ifBlank { BuildConfig.ELEVEN_KEY }
         set(v) = sp.edit().putString(KEY_ELEVEN, v.trim()).apply()
 
     var voiceId: String
-        get() = sp.getString(KEY_VOICE, DEFAULT_VOICE) ?: DEFAULT_VOICE
+        get() = (sp.getString(KEY_VOICE, "") ?: "").ifBlank {
+            BuildConfig.VOICE_ID.ifBlank { DEFAULT_VOICE }
+        }
         set(v) = sp.edit().putString(KEY_VOICE, v.trim()).apply()
 
     var personaName: String
@@ -76,6 +80,6 @@ class Prefs(context: Context) {
         private const val KEY_PERSONA = "persona"
         private const val KEY_SPEAK = "speak"
         const val DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM"
-        const val DEFAULT_NAME = "مُنى"
+        const val DEFAULT_NAME = "منى الذكية"
     }
 }

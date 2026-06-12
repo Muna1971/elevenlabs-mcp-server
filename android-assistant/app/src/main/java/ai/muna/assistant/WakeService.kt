@@ -7,7 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -39,6 +41,7 @@ class WakeService : Service() {
     private val io = Executors.newSingleThreadExecutor()
 
     private var awaitingCommand = false
+    private var awaitingRetries = 0
     private var working = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -121,8 +124,8 @@ class WakeService : Service() {
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onError(error: Int) {
-            // If she didn't continue the conversation, go back to requiring the name.
-            if (awaitingCommand) awaitingCommand = false
+            // While waiting for her command, retry a few times before giving up.
+            if (awaitingCommand) { awaitRetry(); return }
             restartSoon()
         }
         override fun onResults(results: Bundle?) {
@@ -139,10 +142,11 @@ class WakeService : Service() {
     }
 
     private fun handleUtterance(text: String) {
-        if (text.isEmpty()) { restartSoon(); return }
+        if (text.isEmpty()) { if (awaitingCommand) awaitRetry() else restartSoon(); return }
         toast("👂 سمعت: $text")
         if (awaitingCommand) {
             awaitingCommand = false
+            awaitingRetries = 0
             process(text)
             return
         }
@@ -153,10 +157,33 @@ class WakeService : Service() {
             return
         }
         if (rest.isBlank()) {
+            // She said only the name — beep and listen immediately for the command.
             awaitingCommand = true
-            speak("نعم، تفضّلي.")
+            awaitingRetries = 0
+            beep()
+            startListening()
         } else {
             process(rest)
+        }
+    }
+
+    /** No command captured yet while awaiting — give her a couple more tries. */
+    private fun awaitRetry() {
+        awaitingRetries++
+        if (awaitingRetries <= 2) {
+            startListening()
+        } else {
+            awaitingCommand = false
+            awaitingRetries = 0
+            restartSoon()
+        }
+    }
+
+    private fun beep() {
+        runCatching {
+            val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
+            main.postDelayed({ runCatching { tone.release() } }, 400)
         }
     }
 

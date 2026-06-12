@@ -33,10 +33,14 @@ object Commands {
         return JSONArray()
             .put(tool("open_app", "افتح تطبيقًا على هاتف المستخدم (دون بحث بالداخل)",
                 mapOf("name" to "اسم التطبيق مثل: واتساب، انستقرام، الكاميرا، الإعدادات"), listOf("name")))
-            .put(tool("youtube", "افتح يوتيوب وابحث/شغّل ما تطلبه المستخدمة",
-                mapOf("query" to "ما تريد البحث عنه أو تشغيله، مثل: أذكار الصباح"), listOf("query")))
-            .put(tool("open_maps", "افتح خرائط جوجل على مكان أو عنوان",
+            .put(tool("youtube", "افتح يوتيوب وابحث عن فيديو",
+                mapOf("query" to "ما تريد البحث عنه، مثل: أذكار الصباح"), listOf("query")))
+            .put(tool("play_music", "شغّل أغنية أو مقطعًا صوتيًا — يبدأ التشغيل تلقائيًا",
+                mapOf("query" to "اسم الأغنية أو الفنان"), listOf("query")))
+            .put(tool("open_maps", "اعرض مكانًا على خرائط جوجل (دون بدء الملاحة)",
                 mapOf("place" to "اسم المكان أو العنوان، مثل: دبي مول"), listOf("place")))
+            .put(tool("navigate", "ابدأ الملاحة والاتجاهات (التوجيه الصوتي) إلى مكان",
+                mapOf("place" to "الوجهة، مثل: مطار دبي"), listOf("place")))
             .put(tool("call", "أجرِ مكالمة هاتفية برقم أو باسم جهة اتصال",
                 mapOf("target" to "رقم الهاتف أو اسم جهة الاتصال، مثل: ماما"), listOf("target")))
             .put(tool("whatsapp", "افتح محادثة واتساب مع جهة اتصال، مع رسالة جاهزة اختيارية",
@@ -51,7 +55,9 @@ object Commands {
     fun exec(ctx: Context, name: String, input: JSONObject): String = when (name) {
         "open_app" -> openApp(ctx, input.optString("name"))
         "youtube" -> youtube(ctx, input.optString("query"))
+        "play_music" -> playMusic(ctx, input.optString("query"))
         "open_maps" -> openMaps(ctx, input.optString("place"))
+        "navigate" -> navigate(ctx, input.optString("place"))
         "call" -> call(ctx, input.optString("target"))
         "whatsapp" -> whatsapp(ctx, input.optString("contact"), input.optString("message"))
         "set_reminder" -> setReminder(ctx, input.optString("text"))
@@ -88,13 +94,35 @@ object Commands {
         return launch(ctx, intent, "يوتيوب على «$query»", fallback = Intent(Intent.ACTION_VIEW, uri))
     }
 
+    private fun playMusic(ctx: Context, query: String): String {
+        if (query.isBlank()) return "أي أغنية تريدين تشغيلها؟"
+        val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+            putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+            putExtra(android.app.SearchManager.QUERY, query)
+        }
+        val err = fire(ctx, intent)
+        if (err == null) return "أشغّل «$query» الآن."
+        // Fallback: open YouTube search if no music app handled it.
+        return youtube(ctx, query)
+    }
+
     private fun openMaps(ctx: Context, place: String): String {
-        if (place.isBlank()) return "إلى أي مكان تريدين الذهاب؟"
+        if (place.isBlank()) return "أي مكان تريدين عرضه على الخريطة؟"
         val uri = Uri.parse("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(place))
         val intent = Intent(Intent.ACTION_VIEW, uri)
         if (ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.maps") != null)
             intent.setPackage("com.google.android.apps.maps")
         return launch(ctx, intent, "الخريطة على «$place»", fallback = Intent(Intent.ACTION_VIEW, uri))
+    }
+
+    private fun navigate(ctx: Context, place: String): String {
+        if (place.isBlank()) return "إلى أي وجهة تريدين أن أوجّهك؟"
+        val nav = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(place)))
+        if (ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.maps") != null)
+            nav.setPackage("com.google.android.apps.maps")
+        val webDir = Intent(Intent.ACTION_VIEW,
+            Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + Uri.encode(place)))
+        return launch(ctx, nav, "الاتجاهات إلى «$place»", fallback = webDir)
     }
 
     private fun call(ctx: Context, targetRaw: String): String {

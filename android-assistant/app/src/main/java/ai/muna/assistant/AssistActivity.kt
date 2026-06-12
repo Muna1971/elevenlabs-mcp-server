@@ -34,6 +34,7 @@ class AssistActivity : AppCompatActivity() {
     private val convo = mutableListOf<Message>()
     private var recognizer: SpeechRecognizer? = null
     private var player: MediaPlayer? = null
+    private var screenSent = false
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -129,10 +130,15 @@ class AssistActivity : AppCompatActivity() {
         }
         setState(getString(R.string.thinking))
         convo.add(Message("user", text))
+        // Attach the captured screen to the first question so Muna can "see" it.
+        val attach = if (!screenSent) ScreenContext.recent()?.let {
+            screenSent = true
+            ClaudeClient.Attachment("image", it, "image/jpeg")
+        } else null
         val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
         lifecycleScope.launch {
             val reply = try {
-                withContext(Dispatchers.IO) { claude.complete(convo, null, executor) }
+                withContext(Dispatchers.IO) { claude.complete(convo, attach, executor) }
             } catch (e: Exception) {
                 "تعذّر الاتصال: ${e.message ?: ""}"
             }

@@ -96,14 +96,31 @@ object Commands {
 
     private fun playMusic(ctx: Context, query: String): String {
         if (query.isBlank()) return "أي أغنية تريدين تشغيلها؟"
-        val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+        // Prefer real music apps that auto-play a search (Gulf-popular first).
+        val players = listOf(
+            "com.anghami",
+            "com.google.android.apps.youtube.music",
+            "com.spotify.music",
+            "com.google.android.music"
+        )
+        for (pkg in players) {
+            if (ctx.packageManager.getLaunchIntentForPackage(pkg) == null) continue
+            val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+                setPackage(pkg)
+                putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                putExtra(android.app.SearchManager.QUERY, query)
+            }
+            if (fire(ctx, intent) == null) return "أشغّل «$query» الآن."
+        }
+        // Generic: any installed music app that can auto-play.
+        val generic = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
             putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
             putExtra(android.app.SearchManager.QUERY, query)
         }
-        val err = fire(ctx, intent)
-        if (err == null) return "أشغّل «$query» الآن."
-        // Fallback: open YouTube search if no music app handled it.
-        return youtube(ctx, query)
+        if (fire(ctx, generic) == null) return "أشغّل «$query» الآن."
+        // No auto-play music app — open YouTube search as a fallback.
+        youtube(ctx, query)
+        return "ما لقيت تطبيق موسيقى يشغّل تلقائيًا، فتحت لك يوتيوب على «$query». لتشغيل مباشر ثبّتي YouTube Music أو Anghami."
     }
 
     private fun openMaps(ctx: Context, place: String): String {
@@ -228,6 +245,9 @@ object Commands {
         "تيليجرام" to "org.telegram.messenger", "تلجرام" to "org.telegram.messenger", "telegram" to "org.telegram.messenger",
         "انستقرام" to "com.instagram.android", "انستجرام" to "com.instagram.android", "انستا" to "com.instagram.android", "instagram" to "com.instagram.android",
         "يوتيوب" to "com.google.android.youtube", "youtube" to "com.google.android.youtube",
+        "يوتيوب ميوزيك" to "com.google.android.apps.youtube.music", "ميوزيك" to "com.google.android.apps.youtube.music",
+        "سبوتيفاي" to "com.spotify.music", "spotify" to "com.spotify.music",
+        "انغامي" to "com.anghami", "أنغامي" to "com.anghami", "anghami" to "com.anghami",
         "سناب" to "com.snapchat.android", "snapchat" to "com.snapchat.android",
         "تيك توك" to "com.zhiliaoapp.musically", "تيكتوك" to "com.zhiliaoapp.musically", "tiktok" to "com.zhiliaoapp.musically",
         "تويتر" to "com.twitter.android", "اكس" to "com.twitter.android",

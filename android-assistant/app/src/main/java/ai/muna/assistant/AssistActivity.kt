@@ -164,8 +164,10 @@ class AssistActivity : AppCompatActivity() {
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 setOnCompletionListener {
-                    setState(getString(R.string.assist_tap)); it.release()
+                    it.release()
                     if (player === it) player = null
+                    // Hands-free: keep the conversation going.
+                    if (!isFinishing) listen()
                 }
                 setOnPreparedListener { it.start() }
                 prepareAsync()

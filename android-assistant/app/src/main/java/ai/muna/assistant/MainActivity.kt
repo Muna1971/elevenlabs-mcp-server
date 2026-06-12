@@ -60,6 +60,11 @@ class MainActivity : AppCompatActivity() {
     private var player: MediaPlayer? = null
     private var busy = false
 
+    // Hands-free continuous voice conversation
+    private var handsFree = false
+    private var listeningNow = false
+    private var consecutiveErrors = 0
+
     // Meeting mode
     private var meetingActive = false
     private var meetingRecognizer: SpeechRecognizer? = null
@@ -67,7 +72,7 @@ class MainActivity : AppCompatActivity() {
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) startListening() else toast(getString(R.string.mic_permission_needed))
+            if (granted) startHandsFree() else toast(getString(R.string.mic_permission_needed))
         }
 
     private val meetingPermission =
@@ -140,6 +145,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun newConversation() {
         if (meetingActive) stopMeetingListeningOnly()
+        stopHandsFree()
         saveCurrent()
         stopPlayback()
         convo.clear()
@@ -175,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         if (text.isEmpty() && (pendingAttachment != null || pendingText != null))
             text = "حلّلي هذا الملف وأخبريني بمحتواه."
         if (text.isEmpty()) return
+        stopHandsFree() // typing exits voice mode
         binding.input.setText("")
         send(text)
     }
@@ -241,16 +248,20 @@ class MainActivity : AppCompatActivity() {
     // ---- Voice output (ElevenLabs) ----
 
     private fun speak(text: String) {
-        if (!prefs.speakReplies || !eleven.hasKey() || text.isBlank()) return
+        if (!prefs.speakReplies || !eleven.hasKey() || text.isBlank()) { afterSpeak(); return }
         setStatus(getString(R.string.speaking))
         lifecycleScope.launch {
             val file = withContext(Dispatchers.IO) { eleven.synthesize(text) }
-            if (file == null) { setStatus(null); return@launch }
+            if (file == null) {
+                eleven.lastError?.let { toast("تعذّر الصوت: $it") }
+                setStatus(null); afterSpeak(); return@launch
+            }
             stopPlayback()
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 setOnCompletionListener {
                     setStatus(null); it.release(); if (player === it) player = null
+                    afterSpeak()
                 }
                 setOnPreparedListener { it.start() }
                 prepareAsync()
@@ -271,7 +282,41 @@ class MainActivity : AppCompatActivity() {
 
     private fun onMicTapped() {
         if (meetingActive) { toast(getString(R.string.coming_soon)); return }
-        if (hasMic()) startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        if (handsFree) { stopHandsFree(); return }
+        if (hasMic()) startHandsFree() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    private fun startHandsFree() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            toast(getString(R.string.speech_unavailable)); return
+        }
+        handsFree = true
+        consecutiveErrors = 0
+        updateMicUi()
+        startListening()
+    }
+
+    private fun stopHandsFree() {
+        handsFree = false
+        listeningNow = false
+        recognizer?.cancel()
+        updateMicUi()
+        setStatus(null)
+    }
+
+    /** After speaking a reply, resume listening so the conversation is hands-free. */
+    private fun afterSpeak() {
+        if (handsFree && !busy && !listeningNow) {
+            binding.root.postDelayed({ if (handsFree && !busy) startListening() }, 350)
+        } else if (!handsFree) {
+            setStatus(null)
+        }
+    }
+
+    private fun updateMicUi() {
+        val color = if (handsFree) R.color.accent else R.color.navy
+        binding.btnMic.backgroundTintList =
+            android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, color))
     }
 
     private fun startListening() {
@@ -283,6 +328,7 @@ class MainActivity : AppCompatActivity() {
         recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
             setRecognitionListener(listener)
         }
+        listeningNow = true
         setStatus(getString(R.string.listening))
         recognizer?.startListening(recognizeIntent())
     }
@@ -300,12 +346,23 @@ class MainActivity : AppCompatActivity() {
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onError(error: Int) { setStatus(null) }
+        override fun onError(error: Int) {
+            listeningNow = false
+            setStatus(null)
+            if (handsFree) {
+                consecutiveErrors++
+                // Stop after a few silent/no-match errors to avoid an endless loop.
+                if (consecutiveErrors >= 3) stopHandsFree()
+                else binding.root.postDelayed({ if (handsFree && !busy) startListening() }, 400)
+            }
+        }
         override fun onResults(results: Bundle?) {
+            listeningNow = false
+            consecutiveErrors = 0
             setStatus(null)
             val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim().orEmpty()
-            if (spoken.isNotEmpty()) send(spoken)
+            if (spoken.isNotEmpty()) send(spoken) else afterSpeak()
         }
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}

@@ -131,10 +131,13 @@ class AssistActivity : AppCompatActivity() {
         setState(getString(R.string.thinking))
         convo.add(Message("user", text))
         // Attach the captured screen to the first question so Muna can "see" it.
-        val attach = if (!screenSent) ScreenContext.recent()?.let {
+        val screen = if (!screenSent) ScreenContext.recent() else null
+        val attach = screen?.let {
             screenSent = true
+            toast("📷 أرى الشاشة الآن")
             ClaudeClient.Attachment("image", it, "image/jpeg")
-        } else null
+        }
+        if (!screenSent) toast("لا توجد لقطة شاشة — فعّلي «تحليل الشاشة» وافتحيني بالزر الجانبي")
         val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
         lifecycleScope.launch {
             val reply = try {

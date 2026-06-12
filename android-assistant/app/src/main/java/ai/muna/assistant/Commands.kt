@@ -10,14 +10,23 @@ import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 /**
  * Device control exposed to the model as tools. Claude decides which tool to
  * call and extracts the parameters; [exec] performs the real Android action.
  */
 object Commands {
+
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
 
     /** Tool definitions sent to the Messages API. */
     fun toolsJson(): JSONArray {
@@ -96,14 +105,17 @@ object Commands {
 
     private fun playMusic(ctx: Context, query: String): String {
         if (query.isBlank()) return "أي أغنية تريدين تشغيلها؟"
-        // Prefer real music apps that auto-play a search (Gulf-popular first).
-        val players = listOf(
-            "com.anghami",
-            "com.google.android.apps.youtube.music",
-            "com.spotify.music",
-            "com.google.android.music"
-        )
-        for (pkg in players) {
+        // Best path: find the first YouTube result and open it — YouTube auto-plays.
+        val videoId = firstYouTubeVideoId(query)
+        if (videoId != null) {
+            val uri = Uri.parse("https://www.youtube.com/watch?v=$videoId")
+            val intent = Intent(Intent.ACTION_VIEW, uri)
+            if (ctx.packageManager.getLaunchIntentForPackage("com.google.android.youtube") != null)
+                intent.setPackage("com.google.android.youtube")
+            if (fire(ctx, intent) == null) return "أشغّل «$query» الآن."
+        }
+        // Fallback: music apps that auto-play a search.
+        for (pkg in listOf("com.anghami", "com.spotify.music", "com.google.android.apps.youtube.music")) {
             if (ctx.packageManager.getLaunchIntentForPackage(pkg) == null) continue
             val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
                 setPackage(pkg)
@@ -112,15 +124,24 @@ object Commands {
             }
             if (fire(ctx, intent) == null) return "أشغّل «$query» الآن."
         }
-        // Generic: any installed music app that can auto-play.
-        val generic = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
-            putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-            putExtra(android.app.SearchManager.QUERY, query)
-        }
-        if (fire(ctx, generic) == null) return "أشغّل «$query» الآن."
-        // No auto-play music app — open YouTube search as a fallback.
         youtube(ctx, query)
-        return "ما لقيت تطبيق موسيقى يشغّل تلقائيًا، فتحت لك يوتيوب على «$query». لتشغيل مباشر ثبّتي YouTube Music أو Anghami."
+        return "فتحت لك «$query» على يوتيوب."
+    }
+
+    /** Scrape the first videoId from YouTube search results. */
+    private fun firstYouTubeVideoId(query: String): String? = try {
+        val url = "https://www.youtube.com/results?search_query=" +
+            URLEncoder.encode(query, "UTF-8") + "&sp=EgIQAQ%253D%253D" // filter: videos
+        val req = Request.Builder().url(url)
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile")
+            .header("Accept-Language", "ar,en;q=0.9")
+            .build()
+        http.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: return null
+            Regex("\"videoId\":\"([A-Za-z0-9_-]{11})\"").find(body)?.groupValues?.get(1)
+        }
+    } catch (e: Exception) {
+        null
     }
 
     private fun openMaps(ctx: Context, place: String): String {

@@ -56,7 +56,7 @@
     <string name="label_eleven_key">مفتاح ElevenLabs — الصوت (اختياري)</string>
     <string name="hint_eleven_key">مفتاح ElevenLabs</string>
     <string name="label_voice_id">معرّف الصوت في ElevenLabs</string>
-    <string name="hint_voice_id">مثال: 21m00Tcm4TlvDq8ikWAM</string>
+    <string name="hint_voice_id">مثال: EXAVITQu4vr4xnSDxMaL</string>
     <string name="label_persona_name">اسم الشخصية</string>
     <string name="label_persona">شخصية المساعد (التعليمات)</string>
     <string name="label_speak">نطق الردود بالصوت</string>

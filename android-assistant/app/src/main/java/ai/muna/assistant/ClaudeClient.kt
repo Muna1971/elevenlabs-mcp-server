@@ -24,27 +24,25 @@ class ClaudeClient(private val prefs: Prefs) {
      * Sends the full conversation [history] and returns the assistant's reply text.
      * Runs synchronously — call from a background dispatcher.
      */
+    /** A file attached to the final user turn. kind = "image" or "document". */
+    data class Attachment(val kind: String, val data: String, val mime: String)
+
     @Throws(IOException::class)
-    fun complete(
-        history: List<Message>,
-        imageB64: String? = null,
-        imageMime: String = "image/jpeg"
-    ): String {
+    fun complete(history: List<Message>, attachment: Attachment? = null): String {
         val key = prefs.anthropicKey
         if (key.isBlank()) throw IOException("MISSING_ANTHROPIC_KEY")
 
         val messages = JSONArray()
         val lastIndex = history.size - 1
         for ((i, m) in history.withIndex()) {
-            // Attach the image (if any) to the final user turn as a vision block.
-            if (i == lastIndex && m.role == "user" && imageB64 != null) {
-                val image = JSONObject().put("type", "image").put(
-                    "source",
-                    JSONObject().put("type", "base64")
-                        .put("media_type", imageMime).put("data", imageB64)
-                )
+            if (i == lastIndex && m.role == "user" && attachment != null) {
+                val source = JSONObject().put("type", "base64")
+                    .put("media_type", attachment.mime).put("data", attachment.data)
+                val block = JSONObject()
+                    .put("type", if (attachment.kind == "image") "image" else "document")
+                    .put("source", source)
                 val textBlock = JSONObject().put("type", "text").put("text", m.text)
-                val content = JSONArray().put(image).put(textBlock)
+                val content = JSONArray().put(block).put(textBlock)
                 messages.put(JSONObject().put("role", m.role).put("content", content))
             } else {
                 messages.put(JSONObject().put("role", m.role).put("content", m.text))

@@ -41,8 +41,12 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putString(KEY_ELEVEN, v.trim()).apply()
 
     var voiceId: String
-        get() = (sp.getString(KEY_VOICE, "") ?: "").ifBlank {
-            BuildConfig.VOICE_ID.ifBlank { DEFAULT_VOICE }
+        get() {
+            val v = (sp.getString(KEY_VOICE, "") ?: "")
+                .ifBlank { BuildConfig.VOICE_ID.ifBlank { DEFAULT_VOICE } }
+            // Auto-migrate away from the old shared-library voice that free
+            // accounts can't use via the API.
+            return if (v == LEGACY_LIBRARY_VOICE) DEFAULT_VOICE else v
         }
         set(v) = sp.edit().putString(KEY_VOICE, v.trim()).apply()
 
@@ -79,7 +83,9 @@ class Prefs(context: Context) {
         private const val KEY_NAME = "persona_name"
         private const val KEY_PERSONA = "persona"
         private const val KEY_SPEAK = "speak"
-        const val DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM"
+        // Sarah — a "premade" voice usable on free-tier accounts via the API.
+        const val DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"
+        const val LEGACY_LIBRARY_VOICE = "21m00Tcm4TlvDq8ikWAM"
         const val DEFAULT_NAME = "منى الذكية"
     }
 }

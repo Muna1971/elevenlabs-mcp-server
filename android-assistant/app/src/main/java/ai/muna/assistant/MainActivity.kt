@@ -46,13 +46,14 @@ class MainActivity : AppCompatActivity() {
             if (id != 0L) loadSession(id)
         }
 
-    // Image attachment (sent to the model as a vision block on the next message)
-    private var pendingImageB64: String? = null
-    private var imageForNextCompletion: String? = null
+    // File attachment sent to the model on the next message
+    private var pendingAttachment: ClaudeClient.Attachment? = null
+    private var attachForNext: ClaudeClient.Attachment? = null
+    private var pendingText: String? = null
 
-    private val pickImage =
+    private val pickFile =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            if (uri != null) loadImage(uri)
+            if (uri != null) loadAttachment(uri)
         }
 
     private var recognizer: SpeechRecognizer? = null
@@ -100,7 +101,7 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
         binding.btnMic.setOnClickListener { onMicTapped() }
-        binding.btnAttach.setOnClickListener { pickImage.launch("image/*") }
+        binding.btnAttach.setOnClickListener { pickFile.launch("*/*") }
 
         binding.cardMeeting.setOnClickListener { send(getString(R.string.prompt_meeting)) }
         binding.cardMessage.setOnClickListener { send(getString(R.string.prompt_message)) }
@@ -171,7 +172,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendTyped() {
         var text = binding.input.text?.toString()?.trim().orEmpty()
-        if (text.isEmpty() && pendingImageB64 != null) text = "صِفي هذه الصورة وأخبريني بما فيها."
+        if (text.isEmpty() && (pendingAttachment != null || pendingText != null))
+            text = "حلّلي هذا الملف وأخبريني بمحتواه."
         if (text.isEmpty()) return
         binding.input.setText("")
         send(text)
@@ -184,12 +186,13 @@ class MainActivity : AppCompatActivity() {
         }
         stopPlayback()
         showChat()
-        val hasImage = pendingImageB64 != null
-        adapter.add(Message("user", if (hasImage) "🖼️ $text" else text))
+
+        val hasFile = pendingAttachment != null || pendingText != null
+        adapter.add(Message("user", if (hasFile) "📎 $text" else text))
         scrollDown()
 
-        // Device commands run locally (skipped when an image is attached).
-        if (!hasImage) {
+        // Device commands run locally (skipped when a file is attached).
+        if (!hasFile) {
             val cmd = Commands.handle(this, text)
             if (cmd != null) {
                 adapter.add(Message("assistant", cmd))
@@ -197,12 +200,17 @@ class MainActivity : AppCompatActivity() {
                 speak(cmd)
                 return
             }
-        } else {
-            imageForNextCompletion = pendingImageB64
-            pendingImageB64 = null
         }
 
-        convo.add(Message("user", text))
+        var finalText = text
+        pendingText?.let {
+            finalText = "محتوى الملف المرفق:\n\n$it\n\n---\nالطلب: $text"
+            pendingText = null
+        }
+        attachForNext = pendingAttachment
+        pendingAttachment = null
+
+        convo.add(Message("user", finalText))
         runCompletion()
     }
 
@@ -210,11 +218,11 @@ class MainActivity : AppCompatActivity() {
     private fun runCompletion() {
         setStatus(getString(R.string.thinking))
         busy = true
-        val img = imageForNextCompletion
-        imageForNextCompletion = null
+        val attach = attachForNext
+        attachForNext = null
         lifecycleScope.launch {
             val reply = try {
-                withContext(Dispatchers.IO) { claude.complete(convo, img) }
+                withContext(Dispatchers.IO) { claude.complete(convo, attach) }
             } catch (e: Exception) {
                 val msg = e.message ?: "خطأ غير معروف"
                 if (msg == "MISSING_ANTHROPIC_KEY") getString(R.string.need_anthropic_key)
@@ -400,22 +408,44 @@ class MainActivity : AppCompatActivity() {
 
     // ---- Helpers ----
 
-    private fun loadImage(uri: Uri) {
+    private fun loadAttachment(uri: Uri) {
+        val mime = contentResolver.getType(uri) ?: ""
         try {
-            var bmp = contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it) }
-            if (bmp == null) { toast("تعذّر قراءة الصورة"); return }
-            val max = 1024
-            val w = bmp.width; val h = bmp.height
-            if (w > max || h > max) {
-                val scale = max.toFloat() / maxOf(w, h)
-                bmp = Bitmap.createScaledBitmap(bmp, (w * scale).toInt(), (h * scale).toInt(), true)
+            when {
+                mime.startsWith("image/") -> {
+                    var bmp = contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it) }
+                    if (bmp == null) { toast("تعذّر قراءة الصورة"); return }
+                    val max = 1024
+                    val w = bmp.width; val h = bmp.height
+                    if (w > max || h > max) {
+                        val scale = max.toFloat() / maxOf(w, h)
+                        bmp = Bitmap.createScaledBitmap(bmp, (w * scale).toInt(), (h * scale).toInt(), true)
+                    }
+                    val baos = ByteArrayOutputStream()
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                    val b64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+                    pendingAttachment = ClaudeClient.Attachment("image", b64, "image/jpeg")
+                    toast("📎 تم إرفاق الصورة — اكتبي سؤالك ثم أرسلي")
+                }
+                mime == "application/pdf" -> {
+                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return
+                    if (bytes.size > 8 * 1024 * 1024) { toast("ملف PDF كبير جدًا (الحد 8 ميجابايت)"); return }
+                    val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    pendingAttachment = ClaudeClient.Attachment("document", b64, "application/pdf")
+                    toast("📎 تم إرفاق ملف PDF — اكتبي سؤالك ثم أرسلي")
+                }
+                mime.startsWith("text/") || mime == "application/json" ||
+                    mime == "application/xml" || mime.endsWith("/csv") -> {
+                    val txt = contentResolver.openInputStream(uri)?.use {
+                        it.readBytes().toString(Charsets.UTF_8)
+                    } ?: return
+                    pendingText = txt.take(100_000)
+                    toast("📎 تم إرفاق الملف النصّي — اكتبي سؤالك ثم أرسلي")
+                }
+                else -> toast("نوع الملف غير مدعوم بعد. المدعوم: الصور، PDF، والملفات النصّية.")
             }
-            val baos = ByteArrayOutputStream()
-            bmp.compress(Bitmap.CompressFormat.JPEG, 85, baos)
-            pendingImageB64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
-            toast("📎 تم إرفاق الصورة — اكتبي سؤالك عنها ثم أرسلي")
         } catch (e: Exception) {
-            toast("تعذّر إرفاق الصورة")
+            toast("تعذّر إرفاق الملف")
         }
     }
 

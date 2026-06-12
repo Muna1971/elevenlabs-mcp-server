@@ -211,17 +211,6 @@ class MainActivity : AppCompatActivity() {
         adapter.add(Message("user", if (hasFile) "📎 $text" else text))
         scrollDown()
 
-        // Device commands run locally (skipped when a file is attached).
-        if (!hasFile) {
-            val cmd = Commands.handle(this, text)
-            if (cmd != null) {
-                adapter.add(Message("assistant", cmd))
-                scrollDown()
-                speak(cmd)
-                return
-            }
-        }
-
         var finalText = text
         pendingText?.let {
             finalText = "محتوى الملف المرفق:\n\n$it\n\n---\nالطلب: $text"
@@ -240,9 +229,10 @@ class MainActivity : AppCompatActivity() {
         busy = true
         val attach = attachForNext
         attachForNext = null
+        val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
         lifecycleScope.launch {
             val reply = try {
-                withContext(Dispatchers.IO) { claude.complete(convo, attach) }
+                withContext(Dispatchers.IO) { claude.complete(convo, attach, executor) }
             } catch (e: Exception) {
                 val msg = e.message ?: "خطأ غير معروف"
                 if (msg == "MISSING_ANTHROPIC_KEY") getString(R.string.need_anthropic_key)

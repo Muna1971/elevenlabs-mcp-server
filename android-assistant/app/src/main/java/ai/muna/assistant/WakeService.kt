@@ -118,7 +118,11 @@ class WakeService : Service() {
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onError(error: Int) { restartSoon() }
+        override fun onError(error: Int) {
+            // If she didn't continue the conversation, go back to requiring the name.
+            if (awaitingCommand) awaitingCommand = false
+            restartSoon()
+        }
         override fun onResults(results: Bundle?) {
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim().orEmpty()
@@ -168,19 +172,22 @@ class WakeService : Service() {
             n in WAKE_TOKENS || n == "muna" || n == "mona"
 
     private fun process(text: String) {
-        // Device command first
-        Commands.handle(this, text)?.let { speak(it); return }
-        // Otherwise ask Claude
         if (prefs.anthropicKey.isBlank()) { speak("لم يُضبط مفتاح الذكاء بعد."); return }
         working = true
         convo.add(Message("user", text))
         if (convo.size > 12) convo.subList(0, convo.size - 12).clear()
+        val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
         io.execute {
-            val reply = try { claude.complete(convo) } catch (e: Exception) {
+            val reply = try { claude.complete(convo, null, executor) } catch (e: Exception) {
                 "تعذّر الاتصال."
             }
             convo.add(Message("assistant", reply))
-            main.post { working = false; speak(reply) }
+            main.post {
+                working = false
+                // Keep the conversation going — her next reply needs no wake word.
+                awaitingCommand = true
+                speak(reply)
+            }
         }
     }
 

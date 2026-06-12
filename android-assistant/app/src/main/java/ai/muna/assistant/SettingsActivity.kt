@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -74,6 +76,15 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun startWake() {
+        // Background app-launch (calls, maps…) needs "Display over other apps".
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "فعّلي «العرض فوق التطبيقات» ليُنفّذ الأوامر أثناء القيادة", Toast.LENGTH_LONG).show()
+            runCatching {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                )
+            }
+        }
         prefs.wakeEnabled = true
         val intent = Intent(this, WakeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)

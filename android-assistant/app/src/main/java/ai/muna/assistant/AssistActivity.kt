@@ -122,25 +122,16 @@ class AssistActivity : AppCompatActivity() {
 
     private fun process(text: String) {
         binding.transcript.text = text
-
-        Commands.handle(this, text)?.let { confirmation ->
-            binding.transcript.text = confirmation
-            speak(confirmation)
-            // A device action was launched — close the orb shortly after.
-            binding.root.postDelayed({ if (!isFinishing) finish() }, 1500)
-            return
-        }
-
         if (prefs.anthropicKey.isBlank()) {
             binding.transcript.text = getString(R.string.need_anthropic_key)
             return
         }
-
         setState(getString(R.string.thinking))
         convo.add(Message("user", text))
+        val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
         lifecycleScope.launch {
             val reply = try {
-                withContext(Dispatchers.IO) { claude.complete(convo) }
+                withContext(Dispatchers.IO) { claude.complete(convo, null, executor) }
             } catch (e: Exception) {
                 "تعذّر الاتصال: ${e.message ?: ""}"
             }

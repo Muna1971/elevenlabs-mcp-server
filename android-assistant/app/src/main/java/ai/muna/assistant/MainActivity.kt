@@ -229,7 +229,11 @@ class MainActivity : AppCompatActivity() {
         busy = true
         val attach = attachForNext
         attachForNext = null
-        val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
+        val executor = ClaudeClient.ToolExecutor { name, input ->
+            val result = Commands.exec(this, name, input)
+            runOnUiThread { toast("🔧 $name → $result") }
+            result
+        }
         lifecycleScope.launch {
             val reply = try {
                 withContext(Dispatchers.IO) { claude.complete(convo, attach, executor) }

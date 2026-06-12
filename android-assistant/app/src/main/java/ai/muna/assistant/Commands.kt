@@ -5,8 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
@@ -20,8 +18,6 @@ import org.json.JSONObject
  * call and extracts the parameters; [exec] performs the real Android action.
  */
 object Commands {
-
-    private val main = Handler(Looper.getMainLooper())
 
     /** Tool definitions sent to the Messages API. */
     fun toolsJson(): JSONArray {
@@ -76,9 +72,8 @@ object Commands {
             if (name.contains(norm(key))) {
                 val intent = ctx.packageManager.getLaunchIntentForPackage(pkg)
                     ?: return "يبدو أن «$nameRaw» غير مثبّت."
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                start(ctx, intent)
-                return "تم فتح $nameRaw."
+                val err = fire(ctx, intent)
+                return if (err == null) "تم فتح $nameRaw." else "تعذّر فتح $nameRaw ($err)."
             }
         }
         return "لم أتعرّف على التطبيق «$nameRaw»."
@@ -136,10 +131,10 @@ object Commands {
         // Otherwise fall back to the share sheet with the message prefilled.
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"; setPackage("com.whatsapp")
-            putExtra(Intent.EXTRA_TEXT, message); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(Intent.EXTRA_TEXT, message)
         }
-        start(ctx, intent)
-        return "فتحت واتساب — اختاري جهة الاتصال ثم أرسلي."
+        val err = fire(ctx, intent)
+        return if (err == null) "فتحت واتساب — اختاري جهة الاتصال ثم أرسلي." else "تعذّر فتح واتساب ($err)."
     }
 
     private fun setReminder(ctx: Context, text: String): String {
@@ -180,22 +175,24 @@ object Commands {
     }
 
     private fun launch(ctx: Context, intent: Intent, label: String, fallback: Intent? = null): String {
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        main.post {
-            try {
-                ctx.startActivity(intent)
-            } catch (e: Exception) {
-                if (fallback != null) {
-                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    runCatching { ctx.startActivity(fallback) }
-                }
-            }
+        val err = fire(ctx, intent)
+        if (err == null) return "تم فتح $label."
+        if (fallback != null) {
+            val e2 = fire(ctx, fallback)
+            if (e2 == null) return "تم فتح $label."
+            return "تعذّر فتح $label ($e2)."
         }
-        return "تم فتح $label."
+        return "تعذّر فتح $label ($err)."
     }
 
-    private fun start(ctx: Context, intent: Intent) {
-        main.post { runCatching { ctx.startActivity(intent) } }
+    /** Starts an activity; returns null on success, or the error message. */
+    private fun fire(ctx: Context, intent: Intent): String? {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try {
+            ctx.startActivity(intent); null
+        } catch (e: Exception) {
+            e.message ?: e.javaClass.simpleName
+        }
     }
 
     private val APPS = mapOf(

@@ -33,7 +33,7 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
         if (key.isBlank() || text.isBlank()) { lastError = "لا يوجد مفتاح صوت"; return null }
 
         val body = JSONObject()
-            .put("text", text)
+            .put("text", fixPronunciation(text))
             .put("model_id", "eleven_multilingual_v2")
 
         val voiceId = prefs.voiceId.ifBlank { Prefs.DEFAULT_VOICE }
@@ -66,6 +66,10 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
             null
         }
     }
+
+    /** Add diacritics so the name «منى» is pronounced "مُنى" (damma), not "مَنى". */
+    private fun fixPronunciation(text: String): String =
+        text.replace(Regex("(?<![\\u0621-\\u064A])منى(?![\\u0621-\\u064A])"), "مُنى")
 
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()

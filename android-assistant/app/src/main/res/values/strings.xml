@@ -60,6 +60,8 @@
     <string name="label_persona_name">اسم الشخصية</string>
     <string name="label_persona">شخصية المساعد (التعليمات)</string>
     <string name="label_speak">نطق الردود بالصوت</string>
+    <string name="label_wake">وضع النداء (الاستماع الدائم لـ «منى»)</string>
+    <string name="label_wake_hint">يبقى الميكروفون مفتوحًا ليستجيب عند مناداتك «منى» — مناسب للقيادة. يستهلك بطارية أكثر.</string>
     <string name="action_save">حفظ</string>
     <string name="saved">تم الحفظ</string>
 </resources>

@@ -115,6 +115,21 @@
             android:checked="true"
             android:text="@string/label_speak" />
 
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/swWake"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/label_wake" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="@string/label_wake_hint"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnTestVoice"
             style="@style/Widget.Material3.Button.OutlinedButton"

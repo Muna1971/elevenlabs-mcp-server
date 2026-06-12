@@ -3,11 +3,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.google.android.apps.maps" />
     </queries>
 
     <application
@@ -95,5 +102,11 @@
                 android:name="android.speech"
                 android:resource="@xml/recognition_service" />
         </service>
+
+        <!-- Always-listening "call her name" service (driving mode) -->
+        <service
+            android:name=".WakeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 </manifest>

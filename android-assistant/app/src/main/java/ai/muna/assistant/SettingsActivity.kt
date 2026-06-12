@@ -1,9 +1,15 @@
 package ai.muna.assistant
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import ai.muna.assistant.databinding.ActivitySettingsBinding
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +21,15 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var prefs: Prefs
     private var player: MediaPlayer? = null
+
+    private val wakePermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            if (result[Manifest.permission.RECORD_AUDIO] == true) startWake()
+            else {
+                binding.swWake.isChecked = false
+                Toast.makeText(this, R.string.mic_permission_needed, Toast.LENGTH_SHORT).show()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,8 +43,23 @@ class SettingsActivity : AppCompatActivity() {
         binding.etPersonaName.setText(prefs.personaName)
         binding.etPersona.setText(prefs.persona)
         binding.swSpeak.isChecked = prefs.speakReplies
+        binding.swWake.isChecked = prefs.wakeEnabled
 
         binding.btnTestVoice.setOnClickListener { testVoice() }
+
+        binding.swWake.setOnCheckedChangeListener { _, checked ->
+            if (checked) {
+                val needed = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    needed.add(Manifest.permission.POST_NOTIFICATIONS)
+                val missing = needed.filter {
+                    ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+                }
+                if (missing.isEmpty()) startWake() else wakePermissions.launch(missing.toTypedArray())
+            } else {
+                stopWake()
+            }
+        }
 
         binding.btnSave.setOnClickListener {
             prefs.anthropicKey = binding.etAnthropic.text.toString()
@@ -43,8 +73,20 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun startWake() {
+        prefs.wakeEnabled = true
+        val intent = Intent(this, WakeService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+        else startService(intent)
+        Toast.makeText(this, "تم تفعيل وضع النداء — قولي «منى»", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopWake() {
+        prefs.wakeEnabled = false
+        stopService(Intent(this, WakeService::class.java))
+    }
+
     private fun testVoice() {
-        // Save the currently-entered key/voice first so the test uses them.
         prefs.elevenKey = binding.etEleven.text.toString()
         prefs.voiceId = binding.etVoiceId.text.toString()
         val eleven = ElevenLabsClient(prefs, cacheDir)

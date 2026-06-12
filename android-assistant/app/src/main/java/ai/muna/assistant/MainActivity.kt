@@ -81,8 +81,8 @@ class MainActivity : AppCompatActivity() {
         }
 
     // First-run permission prompt (no auto-action)
-    private val initialPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val initialPermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,10 +125,23 @@ class MainActivity : AppCompatActivity() {
         val action = intent?.action
         if (action == Intent.ACTION_ASSIST || action == "android.intent.action.VOICE_ASSIST") {
             binding.root.post { onMicTapped() }
-        } else if (!hasMic()) {
-            // Ask for the microphone permission on first open.
-            initialPermission.launch(Manifest.permission.RECORD_AUDIO)
+        } else {
+            requestCorePermissions()
         }
+    }
+
+    private fun requestCorePermissions() {
+        val wanted = mutableListOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_CONTACTS
+        )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+            wanted.add(Manifest.permission.POST_NOTIFICATIONS)
+        val missing = wanted.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) initialPermissions.launch(missing.toTypedArray())
     }
 
     // ---- View state ----
@@ -338,6 +351,10 @@ class MainActivity : AppCompatActivity() {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            // Be patient — wait for longer pauses before deciding she's done.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 4000L)
         }
 
     private val listener = object : RecognitionListener {

@@ -1,11 +1,15 @@
 package ai.muna.assistant
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.AlarmClock
+import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 
 /**
  * On-device command interpreter. Recognizes Arabic/English commands phrased
@@ -25,12 +29,26 @@ object Commands {
             return setReminder(ctx, t)
         }
 
+        // WhatsApp message (open WhatsApp with the text prefilled to pick a contact)
+        if (hasAny(n, "واتساب", "واتس", "whatsapp") &&
+            hasAny(n, "رساله", "ارسل", "ارسلي", "اكتب", "اكتبي", "قولي", "بلغ", "ابعث", "ابعثي", "send")) {
+            return whatsapp(ctx, t)
+        }
+
+        // Call / dial — by number or by contact name
+        if (hasAny(n, "اتصل", "اتصلي", "كلم", "كلمي", "dial", "call")) {
+            return callCommand(ctx, t)
+        }
+
         val openTrigger = hasAny(n, "افتح", "افتحي", "تفتح", "تفتحي", "شغل", "شغلي", "ادخل", "open", "launch")
         val mapsWord = hasAny(n, "خرائط", "خريطه", "الخريطه", "ماب", "maps", "وجهني", "navigate")
 
         // Maps / navigation (explicit, or "open maps")
         if (mapsWord || (openTrigger && hasAny(n, "موقع", "المكان"))) {
-            return openMaps(ctx, extractPlace(t))
+            val place = extractPlace(t)
+            val wantsPlace = hasAny(n, "على", "الى", "موقع", "المكان", "عنوان", "وجهني")
+            if (place.isBlank() && wantsPlace) return "أي مكان تريدين أن أفتحه على الخريطة؟"
+            return openMaps(ctx, place)
         }
 
         // Open an app
@@ -48,13 +66,6 @@ object Commands {
                 return "حسنًا، أفتح التطبيق."
             }
             // Couldn't match an app — let the model respond instead.
-            return null
-        }
-
-        // Call / dial (number only — name lookup needs contacts access)
-        if (hasAny(n, "اتصل", "اتصلي", "dial")) {
-            val number = t.filter { it.isDigit() }
-            if (number.length >= 3) return dial(ctx, number)
             return null
         }
 
@@ -93,8 +104,65 @@ object Commands {
             fallback = Intent(Intent.ACTION_VIEW, uri))
     }
 
-    private fun dial(ctx: Context, number: String): String =
-        launch(ctx, Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")), "الاتصال بـ $number")
+    private fun callCommand(ctx: Context, text: String): String {
+        val digits = text.filter { it.isDigit() }
+        val number: String
+        val who: String
+        if (digits.length >= 3) {
+            number = digits; who = digits
+        } else {
+            val name = stripWords(
+                text,
+                listOf("اتصل", "اتصلي", "كلم", "كلمي", "على", "ب", "بـ", "رقم",
+                    "call", "dial", "من", "فضلك", "لو", "سمحت")
+            )
+            if (name.isBlank()) return "بمن تريدين الاتصال؟"
+            val resolved = lookupContact(ctx, name)
+                ?: return "لم أجد «$name» في جهات الاتصال."
+            number = resolved; who = name
+        }
+        val canCall = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CALL_PHONE) ==
+            PackageManager.PERMISSION_GRANTED
+        val action = if (canCall) Intent.ACTION_CALL else Intent.ACTION_DIAL
+        return launch(ctx, Intent(action, Uri.parse("tel:$number")), "الاتصال بـ $who")
+    }
+
+    private fun lookupContact(ctx: Context, name: String): String? {
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return null
+        return try {
+            ctx.contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
+                arrayOf("%$name%"),
+                null
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun whatsapp(ctx: Context, text: String): String {
+        val msg = stripWords(
+            text,
+            listOf("ارسل", "ارسلي", "ابعث", "ابعثي", "رساله", "واتساب", "واتس", "whatsapp",
+                "قولي", "قوللها", "اكتب", "اكتبي", "بلغ", "لـ", "ل", "على", "send", "من", "فضلك")
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_TEXT, msg)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            ctx.startActivity(intent)
+            "أفتح واتساب — اختاري جهة الاتصال ثم أرسلي."
+        } catch (e: Exception) {
+            "يبدو أن واتساب غير مثبّت."
+        }
+    }
 
     private fun setReminder(ctx: Context, text: String): String {
         val label = stripWords(

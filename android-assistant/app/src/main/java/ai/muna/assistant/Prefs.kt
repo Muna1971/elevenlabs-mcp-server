@@ -62,6 +62,10 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_SPEAK, true)
         set(v) = sp.edit().putBoolean(KEY_SPEAK, v).apply()
 
+    var wakeEnabled: Boolean
+        get() = sp.getBoolean(KEY_WAKE, false)
+        set(v) = sp.edit().putBoolean(KEY_WAKE, v).apply()
+
     fun systemPrompt(): String {
         val base = persona.ifBlank { defaultPersona() }
         // Keep spoken answers short and direct (Opus 4.8 may otherwise narrate).
@@ -83,6 +87,7 @@ class Prefs(context: Context) {
         private const val KEY_NAME = "persona_name"
         private const val KEY_PERSONA = "persona"
         private const val KEY_SPEAK = "speak"
+        private const val KEY_WAKE = "wake"
         // Sarah — a "premade" voice usable on free-tier accounts via the API.
         const val DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"
         const val LEGACY_LIBRARY_VOICE = "21m00Tcm4TlvDq8ikWAM"

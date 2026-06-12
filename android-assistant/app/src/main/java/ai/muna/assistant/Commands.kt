@@ -25,31 +25,39 @@ object Commands {
 
     /** Tool definitions sent to the Messages API. */
     fun toolsJson(): JSONArray {
-        fun tool(name: String, desc: String, prop: String, propDesc: String): JSONObject {
-            val props = JSONObject().put(prop, JSONObject().put("type", "string").put("description", propDesc))
-            return JSONObject()
-                .put("name", name)
-                .put("description", desc)
-                .put("input_schema", JSONObject()
-                    .put("type", "object")
-                    .put("properties", props)
-                    .put("required", JSONArray().put(prop)))
+        fun tool(name: String, desc: String, props: Map<String, String>, required: List<String>): JSONObject {
+            val p = JSONObject()
+            for ((k, v) in props) p.put(k, JSONObject().put("type", "string").put("description", v))
+            return JSONObject().put("name", name).put("description", desc).put(
+                "input_schema",
+                JSONObject().put("type", "object").put("properties", p)
+                    .put("required", JSONArray().apply { required.forEach { put(it) } })
+            )
         }
         return JSONArray()
-            .put(tool("open_app", "افتح تطبيقًا على هاتف المستخدم", "name", "اسم التطبيق، مثل: واتساب، يوتيوب، انستقرام، الكاميرا، الإعدادات"))
-            .put(tool("open_maps", "افتح خرائط جوجل على مكان أو عنوان محدّد", "place", "اسم المكان أو العنوان، مثل: دبي مول"))
-            .put(tool("call", "أجرِ مكالمة هاتفية برقم أو باسم جهة اتصال", "target", "رقم الهاتف أو اسم جهة الاتصال، مثل: ماما"))
-            .put(tool("send_whatsapp", "افتح واتساب مع رسالة جاهزة لاختيار جهة الاتصال", "message", "نص الرسالة"))
-            .put(tool("set_reminder", "اضبط تذكيرًا أو منبّهًا", "text", "نص التذكير"))
-            .put(tool("web_search", "ابحث في الإنترنت", "query", "كلمات البحث"))
+            .put(tool("open_app", "افتح تطبيقًا على هاتف المستخدم (دون بحث بالداخل)",
+                mapOf("name" to "اسم التطبيق مثل: واتساب، انستقرام، الكاميرا، الإعدادات"), listOf("name")))
+            .put(tool("youtube", "افتح يوتيوب وابحث/شغّل ما تطلبه المستخدمة",
+                mapOf("query" to "ما تريد البحث عنه أو تشغيله، مثل: أذكار الصباح"), listOf("query")))
+            .put(tool("open_maps", "افتح خرائط جوجل على مكان أو عنوان",
+                mapOf("place" to "اسم المكان أو العنوان، مثل: دبي مول"), listOf("place")))
+            .put(tool("call", "أجرِ مكالمة هاتفية برقم أو باسم جهة اتصال",
+                mapOf("target" to "رقم الهاتف أو اسم جهة الاتصال، مثل: ماما"), listOf("target")))
+            .put(tool("whatsapp", "افتح محادثة واتساب مع جهة اتصال، مع رسالة جاهزة اختيارية",
+                mapOf("contact" to "اسم جهة الاتصال (اختياري)", "message" to "نص الرسالة (اختياري)"), listOf()))
+            .put(tool("set_reminder", "اضبط تذكيرًا أو منبّهًا",
+                mapOf("text" to "نص التذكير"), listOf("text")))
+            .put(tool("web_search", "ابحث في الإنترنت",
+                mapOf("query" to "كلمات البحث"), listOf("query")))
     }
 
     /** Executes a tool call from the model. */
     fun exec(ctx: Context, name: String, input: JSONObject): String = when (name) {
         "open_app" -> openApp(ctx, input.optString("name"))
+        "youtube" -> youtube(ctx, input.optString("query"))
         "open_maps" -> openMaps(ctx, input.optString("place"))
         "call" -> call(ctx, input.optString("target"))
-        "send_whatsapp" -> whatsapp(ctx, input.optString("message"))
+        "whatsapp" -> whatsapp(ctx, input.optString("contact"), input.optString("message"))
         "set_reminder" -> setReminder(ctx, input.optString("text"))
         "web_search" -> webSearch(ctx, input.optString("query"))
         else -> "إجراء غير معروف."
@@ -76,9 +84,18 @@ object Commands {
         return "لم أتعرّف على التطبيق «$nameRaw»."
     }
 
+    private fun youtube(ctx: Context, query: String): String {
+        if (query.isBlank()) return openApp(ctx, "يوتيوب")
+        val uri = Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query))
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        if (ctx.packageManager.getLaunchIntentForPackage("com.google.android.youtube") != null)
+            intent.setPackage("com.google.android.youtube")
+        return launch(ctx, intent, "يوتيوب على «$query»", fallback = Intent(Intent.ACTION_VIEW, uri))
+    }
+
     private fun openMaps(ctx: Context, place: String): String {
         if (place.isBlank()) return "إلى أي مكان تريدين الذهاب؟"
-        val uri = Uri.parse("geo:0,0?q=" + Uri.encode(place))
+        val uri = Uri.parse("https://www.google.com/maps/search/?api=1&query=" + Uri.encode(place))
         val intent = Intent(Intent.ACTION_VIEW, uri)
         if (ctx.packageManager.getLaunchIntentForPackage("com.google.android.apps.maps") != null)
             intent.setPackage("com.google.android.apps.maps")
@@ -103,14 +120,23 @@ object Commands {
         return launch(ctx, Intent(action, Uri.parse("tel:$number")), "الاتصال بـ $who")
     }
 
-    private fun whatsapp(ctx: Context, message: String): String {
+    private fun whatsapp(ctx: Context, contact: String, message: String): String {
         if (ctx.packageManager.getLaunchIntentForPackage("com.whatsapp") == null)
             return "يبدو أن واتساب غير مثبّت."
+
+        // If a contact is named and found, open that chat directly.
+        if (contact.isNotBlank()) {
+            val raw = lookupContact(ctx, contact)
+            if (raw != null) {
+                val intl = toIntl(raw)
+                val url = "https://wa.me/$intl" + if (message.isNotBlank()) "?text=" + Uri.encode(message) else ""
+                return launch(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(url)), "محادثة واتساب مع $contact")
+            }
+        }
+        // Otherwise fall back to the share sheet with the message prefilled.
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            setPackage("com.whatsapp")
-            putExtra(Intent.EXTRA_TEXT, message)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            type = "text/plain"; setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_TEXT, message); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         start(ctx, intent)
         return "فتحت واتساب — اختاري جهة الاتصال ثم أرسلي."
@@ -145,6 +171,14 @@ object Commands {
         }
     }
 
+    /** Best-effort international format for wa.me (defaults local numbers to UAE). */
+    private fun toIntl(raw: String): String {
+        var d = raw.filter { it.isDigit() || it == '+' }.replace("+", "")
+        if (d.startsWith("00")) d = d.drop(2)
+        if (d.startsWith("0")) d = "971" + d.drop(1)
+        return d
+    }
+
     private fun launch(ctx: Context, intent: Intent, label: String, fallback: Intent? = null): String {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         main.post {
@@ -160,7 +194,6 @@ object Commands {
         return "تم فتح $label."
     }
 
-    /** Launch an already-resolved intent on the main thread. */
     private fun start(ctx: Context, intent: Intent) {
         main.post { runCatching { ctx.startActivity(intent) } }
     }

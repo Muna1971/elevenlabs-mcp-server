@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
@@ -18,6 +20,8 @@ import org.json.JSONObject
  * call and extracts the parameters; [exec] performs the real Android action.
  */
 object Commands {
+
+    private val main = Handler(Looper.getMainLooper())
 
     /** Tool definitions sent to the Messages API. */
     fun toolsJson(): JSONArray {
@@ -65,7 +69,7 @@ object Commands {
                 val intent = ctx.packageManager.getLaunchIntentForPackage(pkg)
                     ?: return "يبدو أن «$nameRaw» غير مثبّت."
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                ctx.startActivity(intent)
+                start(ctx, intent)
                 return "تم فتح $nameRaw."
             }
         }
@@ -100,17 +104,16 @@ object Commands {
     }
 
     private fun whatsapp(ctx: Context, message: String): String {
+        if (ctx.packageManager.getLaunchIntentForPackage("com.whatsapp") == null)
+            return "يبدو أن واتساب غير مثبّت."
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             setPackage("com.whatsapp")
             putExtra(Intent.EXTRA_TEXT, message)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        return try {
-            ctx.startActivity(intent); "فتحت واتساب — اختاري جهة الاتصال ثم أرسلي."
-        } catch (e: Exception) {
-            "يبدو أن واتساب غير مثبّت."
-        }
+        start(ctx, intent)
+        return "فتحت واتساب — اختاري جهة الاتصال ثم أرسلي."
     }
 
     private fun setReminder(ctx: Context, text: String): String {
@@ -144,15 +147,22 @@ object Commands {
 
     private fun launch(ctx: Context, intent: Intent, label: String, fallback: Intent? = null): String {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
-            ctx.startActivity(intent); "تم فتح $label."
-        } catch (e: Exception) {
-            if (fallback != null) {
-                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { ctx.startActivity(fallback) }
-                    .map { "تم فتح $label." }.getOrDefault("تعذّر فتح $label.")
-            } else "تعذّر فتح $label."
+        main.post {
+            try {
+                ctx.startActivity(intent)
+            } catch (e: Exception) {
+                if (fallback != null) {
+                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { ctx.startActivity(fallback) }
+                }
+            }
         }
+        return "تم فتح $label."
+    }
+
+    /** Launch an already-resolved intent on the main thread. */
+    private fun start(ctx: Context, intent: Intent) {
+        main.post { runCatching { ctx.startActivity(intent) } }
     }
 
     private val APPS = mapOf(

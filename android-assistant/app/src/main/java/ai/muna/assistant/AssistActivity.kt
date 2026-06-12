@@ -130,16 +130,19 @@ class AssistActivity : AppCompatActivity() {
         }
         setState(getString(R.string.thinking))
         convo.add(Message("user", text))
-        // Attach the captured screen to the first question so Muna can "see" it.
-        val screen = if (!screenSent) ScreenContext.recent() else null
-        val attach = screen?.let {
-            screenSent = true
-            toast("📷 أرى الشاشة الآن")
-            ClaudeClient.Attachment("image", it, "image/jpeg")
-        }
-        if (!screenSent) toast("لا توجد لقطة شاشة — فعّلي «تحليل الشاشة» وافتحيني بالزر الجانبي")
         val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
+        val wantScreen = !screenSent
         lifecycleScope.launch {
+            // Wait briefly for the captured screen so Muna can "see" it.
+            val screen = if (wantScreen) withContext(Dispatchers.IO) { awaitScreen(1500) } else null
+            val attach = screen?.let {
+                screenSent = true
+                toast("📷 أرى الشاشة الآن")
+                ClaudeClient.Attachment("image", it, "image/jpeg")
+            }
+            if (wantScreen && attach == null) {
+                toast("لا توجد لقطة شاشة — فعّلي «تحليل الشاشة» وافتحيني بالزر الجانبي")
+            }
             val reply = try {
                 withContext(Dispatchers.IO) { claude.complete(convo, attach, executor) }
             } catch (e: Exception) {
@@ -177,6 +180,15 @@ class AssistActivity : AppCompatActivity() {
                 prepareAsync()
             }
         }
+    }
+
+    private fun awaitScreen(timeoutMs: Long): String? {
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            ScreenContext.recent()?.let { return it }
+            try { Thread.sleep(120) } catch (e: InterruptedException) { break }
+        }
+        return ScreenContext.recent()
     }
 
     private fun stopPlayback() {

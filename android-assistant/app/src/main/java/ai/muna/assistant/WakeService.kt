@@ -48,7 +48,8 @@ class WakeService : Service() {
         claude = ClaudeClient(prefs)
         eleven = ElevenLabsClient(prefs, cacheDir)
         startAsForeground()
-        startListening()
+        // Spoken confirmation so she knows it's listening (then it starts listening).
+        speak("تم تفعيل وضع النداء. ناديني باسمي: منى.")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -134,18 +135,37 @@ class WakeService : Service() {
             process(text)
             return
         }
-        if (norm(text).contains("مني")) {
-            val rest = afterWake(text)
-            if (rest.isBlank()) {
-                awaitingCommand = true
-                speak("نعم، تفضّلي.")
-            } else {
-                process(rest)
-            }
-        } else {
+        val rest = afterWake(text)
+        if (rest == null) {
+            // Not addressed to her — keep listening.
             restartSoon()
+            return
+        }
+        if (rest.isBlank()) {
+            awaitingCommand = true
+            speak("نعم، تفضّلي.")
+        } else {
+            process(rest)
         }
     }
+
+    /**
+     * Returns the request after the wake word, "" if only the name was said,
+     * or null if she wasn't addressing Muna at all.
+     */
+    private fun afterWake(text: String): String? {
+        val tokens = text.split(Regex("\\s+")).filter { it.isNotBlank() }
+        var lastWake = -1
+        for (i in tokens.indices) {
+            if (isWakeToken(norm(tokens[i]))) lastWake = i
+        }
+        if (lastWake == -1) return null
+        return tokens.drop(lastWake + 1).joinToString(" ").trim()
+    }
+
+    private fun isWakeToken(n: String): Boolean =
+        n.contains("مني") || n.contains("منا") || n.contains("مونا") ||
+            n in WAKE_TOKENS || n == "muna" || n == "mona"
 
     private fun process(text: String) {
         // Device command first
@@ -190,16 +210,6 @@ class WakeService : Service() {
         player = null
     }
 
-    private fun afterWake(text: String): String {
-        val tokens = text.split(Regex("\\s+"))
-        val idx = tokens.indexOfFirst { norm(it).contains("مني") }
-        if (idx == -1) return ""
-        var rest = tokens.drop(idx + 1)
-        while (rest.isNotEmpty() && norm(rest.first()) in listOf("الذكيه", "ذكيه", "الكندي", "كندي"))
-            rest = rest.drop(1)
-        return rest.joinToString(" ").trim()
-    }
-
     private fun norm(s: String): String =
         s.lowercase().trim()
             .replace(Regex("[ً-ْـ]"), "")
@@ -215,5 +225,11 @@ class WakeService : Service() {
 
     companion object {
         const val ACTION_STOP = "ai.muna.assistant.STOP_WAKE"
+        // Name variants the recognizer may produce for "منى / الذكية / الكندي".
+        private val WAKE_TOKENS = setOf(
+            "مني", "منى", "منا", "مونا", "المني",
+            "الكندي", "الكندى", "كندي",
+            "الذكيه", "الذكيا", "ذكيه", "ذكيا"
+        )
     }
 }

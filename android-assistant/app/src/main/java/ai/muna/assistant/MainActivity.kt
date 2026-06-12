@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     private var recognizer: SpeechRecognizer? = null
     private var player: MediaPlayer? = null
     private var busy = false
+    private lateinit var androidTts: AndroidTts
 
     // Hands-free continuous voice conversation
     private var handsFree = false
@@ -92,6 +93,7 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         claude = ClaudeClient(prefs)
         eleven = ElevenLabsClient(prefs, cacheDir)
+        androidTts = AndroidTts(this)
         history = HistoryStore(this)
 
         adapter = ChatAdapter(mutableListOf())
@@ -255,13 +257,14 @@ class MainActivity : AppCompatActivity() {
     // ---- Voice output (ElevenLabs) ----
 
     private fun speak(text: String) {
-        if (!prefs.speakReplies || !eleven.hasKey() || text.isBlank()) { afterSpeak(); return }
+        if (!prefs.speakReplies || text.isBlank()) { afterSpeak(); return }
         setStatus(getString(R.string.speaking))
         lifecycleScope.launch {
-            val file = withContext(Dispatchers.IO) { eleven.synthesize(text) }
+            val file = if (eleven.hasKey()) withContext(Dispatchers.IO) { eleven.synthesize(text) } else null
             if (file == null) {
-                eleven.lastError?.let { toast("تعذّر الصوت: $it") }
-                setStatus(null); afterSpeak(); return@launch
+                // ElevenLabs unavailable (e.g. out of credits) → free Android voice.
+                androidTts.speak(text) { setStatus(null); afterSpeak() }
+                return@launch
             }
             stopPlayback()
             player = MediaPlayer().apply {
@@ -541,5 +544,6 @@ class MainActivity : AppCompatActivity() {
         stopPlayback()
         recognizer?.destroy()
         meetingRecognizer?.destroy()
+        androidTts.shutdown()
     }
 }

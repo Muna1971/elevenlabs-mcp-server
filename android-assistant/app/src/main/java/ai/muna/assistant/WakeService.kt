@@ -37,6 +37,7 @@ class WakeService : Service() {
 
     private var recognizer: SpeechRecognizer? = null
     private var player: MediaPlayer? = null
+    private lateinit var androidTts: AndroidTts
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
 
@@ -51,6 +52,7 @@ class WakeService : Service() {
         prefs = Prefs(this)
         claude = ClaudeClient(prefs)
         eleven = ElevenLabsClient(prefs, cacheDir)
+        androidTts = AndroidTts(this)
         startAsForeground()
         // Spoken confirmation so she knows it's listening (then it starts listening).
         speak("تم تفعيل وضع النداء. ناديني باسمي: منى.")
@@ -230,12 +232,16 @@ class WakeService : Service() {
     }
 
     private fun speak(text: String) {
-        if (!prefs.speakReplies || !eleven.hasKey() || text.isBlank()) { restartSoon(); return }
+        if (!prefs.speakReplies || text.isBlank()) { restartSoon(); return }
         working = true
         io.execute {
-            val file = eleven.synthesize(text)
+            val file = if (eleven.hasKey()) eleven.synthesize(text) else null
             main.post {
-                if (file == null) { working = false; restartSoon(); return@post }
+                if (file == null) {
+                    // ElevenLabs unavailable → free Android voice.
+                    androidTts.speak(text) { working = false; restartSoon(300) }
+                    return@post
+                }
                 stopPlayback()
                 player = MediaPlayer().apply {
                     setDataSource(file.absolutePath)
@@ -265,6 +271,7 @@ class WakeService : Service() {
         super.onDestroy()
         stopPlayback()
         recognizer?.destroy()
+        androidTts.shutdown()
         io.shutdownNow()
     }
 

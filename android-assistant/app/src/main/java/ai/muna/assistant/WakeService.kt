@@ -16,6 +16,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.widget.Toast
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -132,8 +133,13 @@ class WakeService : Service() {
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
+    private fun toast(msg: String) = main.post {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
     private fun handleUtterance(text: String) {
         if (text.isEmpty()) { restartSoon(); return }
+        toast("👂 سمعت: $text")
         if (awaitingCommand) {
             awaitingCommand = false
             process(text)
@@ -176,10 +182,14 @@ class WakeService : Service() {
         working = true
         convo.add(Message("user", text))
         if (convo.size > 12) convo.subList(0, convo.size - 12).clear()
-        val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
+        val executor = ClaudeClient.ToolExecutor { name, input ->
+            val r = Commands.exec(this, name, input)
+            toast("🔧 $name → $r")
+            r
+        }
         io.execute {
             val reply = try { claude.complete(convo, null, executor) } catch (e: Exception) {
-                "تعذّر الاتصال."
+                "تعذّر الاتصال: ${e.message ?: ""}"
             }
             convo.add(Message("assistant", reply))
             main.post {

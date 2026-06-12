@@ -26,6 +26,7 @@ class AndroidTts(context: Context) {
                 if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
                     runCatching { tts.setLanguage(Locale("ar")) }
                 }
+                selectBestArabicVoice()
                 ready = true
             }
         }
@@ -35,6 +36,16 @@ class AndroidTts(context: Context) {
             @Deprecated("deprecated") override fun onError(utteranceId: String?) = finish()
             override fun onError(utteranceId: String?, errorCode: Int) = finish()
         })
+    }
+
+    /** Pick the highest-quality Arabic voice available on the device. */
+    private fun selectBestArabicVoice() {
+        runCatching {
+            val best = tts.voices
+                ?.filter { it.locale?.language == "ar" }
+                ?.maxByOrNull { it.quality }
+            if (best != null) tts.voice = best
+        }
     }
 
     private fun finish() {

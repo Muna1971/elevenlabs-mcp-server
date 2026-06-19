@@ -9,7 +9,7 @@
 
     <!-- Home / welcome -->
     <string name="home_greeting">يا مرحبا الساع، أنا مطراش</string>
-    <string name="home_question">شو تامرينّي يَمّايَهْ؟</string>
+    <string name="home_question">شو تامرني؟</string>
 
     <string name="card_meeting">اجتماع</string>
     <string name="card_meeting_sub">تنظيم وجدولة</string>

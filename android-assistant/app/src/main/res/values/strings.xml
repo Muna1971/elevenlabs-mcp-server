@@ -8,8 +8,8 @@
     <string name="header_subtitle">مساعدك الصوتي الذكي</string>
 
     <!-- Home / welcome -->
-    <string name="home_greeting">هلا، أنا مطراش</string>
-    <string name="home_question">شو تبا أساعدك فيه؟</string>
+    <string name="home_greeting">يا مرحبا الساع، أنا مطراش</string>
+    <string name="home_question">شو تبا أساعدچ فيه؟</string>
 
     <string name="card_meeting">اجتماع</string>
     <string name="card_meeting_sub">تنظيم وجدولة</string>

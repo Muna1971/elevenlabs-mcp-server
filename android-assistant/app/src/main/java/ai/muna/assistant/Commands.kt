@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
@@ -58,6 +59,21 @@ object Commands {
                 mapOf("text" to "نص التذكير"), listOf("text")))
             .put(tool("web_search", "ابحث في الإنترنت",
                 mapOf("query" to "كلمات البحث"), listOf("query")))
+            .put(JSONObject().put("name", "send_email")
+                .put("description", "افتح البريد لإرسال رسالة (اكتب أنت نص الرسالة)")
+                .put("input_schema", JSONObject().put("type", "object").put("properties", JSONObject()
+                    .put("to", JSONObject().put("type", "string").put("description", "بريد المستلم (اتركه فارغًا إن لم يُذكر)"))
+                    .put("subject", JSONObject().put("type", "string").put("description", "عنوان الرسالة"))
+                    .put("body", JSONObject().put("type", "string").put("description", "نص الرسالة")))
+                    .put("required", JSONArray().put("subject").put("body"))))
+            .put(JSONObject().put("name", "email_document")
+                .put("description", "أنشئ ملف وورد (docx) بالمحتوى المطلوب وأرفقه في بريد جاهز للإرسال")
+                .put("input_schema", JSONObject().put("type", "object").put("properties", JSONObject()
+                    .put("to", JSONObject().put("type", "string").put("description", "بريد المستلم (اتركه فارغًا إن لم يُذكر)"))
+                    .put("subject", JSONObject().put("type", "string").put("description", "عنوان البريد"))
+                    .put("title", JSONObject().put("type", "string").put("description", "عنوان المستند"))
+                    .put("content", JSONObject().put("type", "string").put("description", "محتوى المستند كاملًا (نص)")))
+                    .put("required", JSONArray().put("title").put("content"))))
     }
 
     /** Executes a tool call from the model. */
@@ -71,6 +87,9 @@ object Commands {
         "whatsapp" -> whatsapp(ctx, input.optString("contact"), input.optString("message"))
         "set_reminder" -> setReminder(ctx, input.optString("text"))
         "web_search" -> webSearch(ctx, input.optString("query"))
+        "send_email" -> sendEmail(ctx, input.optString("to"), input.optString("subject"), input.optString("body"))
+        "email_document" -> emailDocument(ctx, input.optString("to"), input.optString("subject"),
+            input.optString("title"), input.optString("content"))
         else -> "إجراء غير معروف."
     }
 
@@ -215,6 +234,40 @@ object Commands {
     private fun webSearch(ctx: Context, query: String): String =
         launch(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(query))),
             "البحث عن «$query»")
+
+    private fun sendEmail(ctx: Context, to: String, subject: String, body: String): String {
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")).apply {
+            if (to.isNotBlank()) putExtra(Intent.EXTRA_EMAIL, arrayOf(to))
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        val err = fire(ctx, intent)
+        return if (err == null) "فتحت لك البريد بالرسالة جاهزة، راجعها واضغط إرسال." else "ما لقيت تطبيق بريد ($err)."
+    }
+
+    private fun emailDocument(ctx: Context, to: String, subject: String, title: String, content: String): String {
+        return try {
+            val safe = (title.ifBlank { "مستند" }).replace(Regex("[\\\\/:*?\"<>|]"), " ").take(40).trim()
+            val file = File(ctx.cacheDir, "$safe.docx")
+            DocxBuilder.build(file, title, content)
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                ctx, "${ctx.packageName}.fileprovider", file
+            )
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                if (to.isNotBlank()) putExtra(Intent.EXTRA_EMAIL, arrayOf(to))
+                putExtra(Intent.EXTRA_SUBJECT, subject.ifBlank { title })
+                putExtra(Intent.EXTRA_TEXT, "مرفق: $title")
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(send, "إرسال المستند").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(chooser)
+            "جهّزت ملف الوورد وأرفقته في بريد جاهز، راجعه واضغط إرسال."
+        } catch (e: Exception) {
+            "تعذّر إنشاء المستند (${e.message})."
+        }
+    }
 
     private fun lookupContact(ctx: Context, name: String): String? {
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) !=

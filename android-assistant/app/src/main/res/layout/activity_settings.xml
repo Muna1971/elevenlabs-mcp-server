@@ -130,6 +130,20 @@
             android:textColor="@color/text_muted"
             android:textSize="12sp" />
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/label_addressee"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spAddressee"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:entries="@array/addressee_options" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnTestVoice"
             style="@style/Widget.Material3.Button.OutlinedButton"

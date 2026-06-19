@@ -9,7 +9,7 @@
 
     <!-- Home / welcome -->
     <string name="home_greeting">يا مرحبا الساع، أنا مطراش</string>
-    <string name="home_question">شو تبا أساعدچ فيه؟</string>
+    <string name="home_question">شو تامرينّي يَمّايَهْ؟</string>
 
     <string name="card_meeting">اجتماع</string>
     <string name="card_meeting_sub">تنظيم وجدولة</string>
@@ -60,6 +60,13 @@
     <string name="label_persona_name">اسم الشخصية</string>
     <string name="label_persona">شخصية المساعد (التعليمات)</string>
     <string name="label_speak">نطق الردود بالصوت</string>
+    <string name="label_addressee">نوع المخاطَب (كيف يخاطبك مطراش)</string>
+    <string-array name="addressee_options">
+        <item>امرأة كبيرة (يَمّايَهْ)</item>
+        <item>امرأة شابة</item>
+        <item>رجل كبير (يَبُويَهْ)</item>
+        <item>رجل شاب</item>
+    </string-array>
     <string name="label_wake">وضع النداء (الاستماع الدائم لـ «مطراش»)</string>
     <string name="label_wake_hint">يبقى الميكروفون مفتوحًا ليستجيب عند مناداتك «مطراش» — مناسب للقيادة. يستهلك بطارية أكثر.</string>
     <string name="action_save">حفظ</string>

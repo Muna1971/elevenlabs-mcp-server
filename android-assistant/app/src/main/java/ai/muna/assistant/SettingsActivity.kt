@@ -46,6 +46,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.etPersona.setText(prefs.persona)
         binding.swSpeak.isChecked = prefs.speakReplies
         binding.swWake.isChecked = prefs.wakeEnabled
+        binding.spAddressee.setSelection(prefs.addressee)
 
         binding.btnTestVoice.setOnClickListener { testVoice() }
 
@@ -70,6 +71,7 @@ class SettingsActivity : AppCompatActivity() {
             prefs.personaName = binding.etPersonaName.text.toString()
             prefs.persona = binding.etPersona.text.toString()
             prefs.speakReplies = binding.swSpeak.isChecked
+            prefs.addressee = binding.spAddressee.selectedItemPosition
             Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show()
             finish()
         }

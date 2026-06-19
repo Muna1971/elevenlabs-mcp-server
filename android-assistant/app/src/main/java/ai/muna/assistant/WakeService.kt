@@ -55,7 +55,7 @@ class WakeService : Service() {
         androidTts = AndroidTts(this)
         startAsForeground()
         // Spoken confirmation so she knows it's listening (then it starts listening).
-        speak("تم تفعيل وضع النداء. ناديني باسمي: منى.")
+        speak("تم تفعيل وضع النداء. نادِني باسمي: مطراش.")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -80,8 +80,8 @@ class WakeService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         val notif: Notification = Notification.Builder(this, channelId)
-            .setContentTitle("منى تستمع لندائك")
-            .setContentText("قولي «منى» متبوعةً بطلبك")
+            .setContentTitle("مطراش يستمع لندائك")
+            .setContentText("قل «مطراش» متبوعةً بطلبك")
             .setSmallIcon(R.drawable.ic_mic_dark)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "إيقاف", stop).build())
@@ -204,8 +204,8 @@ class WakeService : Service() {
     }
 
     private fun isWakeToken(n: String): Boolean =
-        n.contains("مني") || n.contains("منا") || n.contains("مونا") ||
-            n in WAKE_TOKENS || n == "muna" || n == "mona"
+        n.contains("مطراش") || n.contains("مطرش") || n.contains("متراش") ||
+            n in WAKE_TOKENS || n.contains("matrash") || n.contains("mutrash")
 
     private fun process(text: String) {
         if (prefs.anthropicKey.isBlank()) { speak("لم يُضبط مفتاح الذكاء بعد."); return }
@@ -277,11 +277,9 @@ class WakeService : Service() {
 
     companion object {
         const val ACTION_STOP = "ai.muna.assistant.STOP_WAKE"
-        // Name variants the recognizer may produce for "منى / الذكية / الكندي".
+        // Name variants the recognizer may produce for "مطراش".
         private val WAKE_TOKENS = setOf(
-            "مني", "منى", "منا", "مونا", "المني",
-            "الكندي", "الكندى", "كندي",
-            "الذكيه", "الذكيا", "ذكيه", "ذكيا"
+            "مطراش", "مطرش", "متراش", "مطراج", "مطروش", "مطرااش"
         )
     }
 }

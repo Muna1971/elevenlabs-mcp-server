@@ -89,7 +89,7 @@ class SettingsActivity : AppCompatActivity() {
         val intent = Intent(this, WakeService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
         else startService(intent)
-        Toast.makeText(this, "تم تفعيل وضع النداء — قولي «منى»", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "تم تفعيل وضع النداء — قل «مطراش»", Toast.LENGTH_SHORT).show()
     }
 
     private fun stopWake() {
@@ -103,7 +103,7 @@ class SettingsActivity : AppCompatActivity() {
         val eleven = ElevenLabsClient(prefs, cacheDir)
         binding.voiceResult.text = "جارٍ الاختبار…"
         lifecycleScope.launch {
-            val file = withContext(Dispatchers.IO) { eleven.synthesize("مرحبًا، أنا منى الذكية.") }
+            val file = withContext(Dispatchers.IO) { eleven.synthesize("مرحبًا، أنا مطراش مساعدك الصوتي الذكي.") }
             if (file == null) {
                 binding.voiceResult.text = "❌ فشل الصوت: ${eleven.lastError ?: "سبب غير معروف"}"
                 return@launch

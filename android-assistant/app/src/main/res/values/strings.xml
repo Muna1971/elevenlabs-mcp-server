@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">منى الذكية</string>
+    <string name="app_name">مطراش</string>
     <string name="settings_title">الإعدادات</string>
 
     <!-- Header -->
-    <string name="header_title">منى الكندي</string>
-    <string name="header_subtitle">المساعدة التنفيذية الذكية</string>
+    <string name="header_title">مطراش</string>
+    <string name="header_subtitle">مساعدك الصوتي الذكي</string>
 
     <!-- Home / welcome -->
-    <string name="home_greeting">مرحبًا، أنا منى</string>
+    <string name="home_greeting">مرحبًا، أنا مطراش</string>
     <string name="home_question">كيف يمكنني مساعدتك اليوم؟</string>
 
     <string name="card_meeting">اجتماع</string>
@@ -60,8 +60,8 @@
     <string name="label_persona_name">اسم الشخصية</string>
     <string name="label_persona">شخصية المساعد (التعليمات)</string>
     <string name="label_speak">نطق الردود بالصوت</string>
-    <string name="label_wake">وضع النداء (الاستماع الدائم لـ «منى»)</string>
-    <string name="label_wake_hint">يبقى الميكروفون مفتوحًا ليستجيب عند مناداتك «منى» — مناسب للقيادة. يستهلك بطارية أكثر.</string>
+    <string name="label_wake">وضع النداء (الاستماع الدائم لـ «مطراش»)</string>
+    <string name="label_wake_hint">يبقى الميكروفون مفتوحًا ليستجيب عند مناداتك «مطراش» — مناسب للقيادة. يستهلك بطارية أكثر.</string>
     <string name="action_save">حفظ</string>
     <string name="saved">تم الحفظ</string>
 </resources>

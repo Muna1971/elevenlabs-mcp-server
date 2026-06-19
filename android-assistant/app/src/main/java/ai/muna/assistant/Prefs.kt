@@ -44,9 +44,8 @@ class Prefs(context: Context) {
         get() {
             val v = (sp.getString(KEY_VOICE, "") ?: "")
                 .ifBlank { BuildConfig.VOICE_ID.ifBlank { DEFAULT_VOICE } }
-            // Auto-migrate away from the old shared-library voice that free
-            // accounts can't use via the API.
-            return if (v == LEGACY_LIBRARY_VOICE) DEFAULT_VOICE else v
+            // Auto-migrate away from old default voices to the current one.
+            return if (v == LEGACY_LIBRARY_VOICE || v == "EXAVITQu4vr4xnSDxMaL") DEFAULT_VOICE else v
         }
         set(v) = sp.edit().putString(KEY_VOICE, v.trim()).apply()
 
@@ -69,35 +68,36 @@ class Prefs(context: Context) {
     fun systemPrompt(): String {
         val base = persona.ifBlank { defaultPersona() }
         return base + "\n\n" +
-            "أنت تُستخدمين كمساعدة صوتية على الهاتف. اجعلي ردودك مباشرة وقصيرة وواضحة وصالحة " +
-            "للنطق بصوت عالٍ، دون رموز أو تنسيقات. أجيبي بنفس لغة المستخدمة. " +
-            "تفهمين اللهجة الإماراتية والخليجية جيدًا وتتعاملين معها بطبيعية (مثل: سيري، ودّي، أبا، " +
-            "يبتلي، شحقّه، وين، هاللحين، عساك، تكفّى)، وردّي بعربية بسيطة وسهلة. " +
-            "كثير من مستخدميك من كبار السن أو أصحاب الهمم ممّن لا يقرؤون أو لا يرون الشاشة، " +
-            "لذا تحدّثي بهدوء وصبر، وأكّدي كل إجراء بصوت واضح (مثل: «حاضر، أتصل بماما الآن»)، " +
-            "واسألي سؤالًا واحدًا بسيطًا عند الحاجة لمعلومة ناقصة. " +
-            "لديك أدوات للتحكم بالهاتف: فتح التطبيقات، يوتيوب، خرائط جوجل، الاتصال، واتساب، التذكير، البحث. " +
-            "عندما تطلب المستخدمة إجراءً نفّذيه باستدعاء الأداة المناسبة فعليًا — لا تقولي إنك ستفعلين " +
-            "شيئًا دون استدعاء الأداة. إن نقصت معلومة فاسأليها عنها بإيجاز ثم استدعي الأداة بعد أن تجيب. " +
-            "قدّمي الإجابة النهائية فقط دون شرح لطريقة تفكيرك."
+            "أنت تُستخدم كمساعد صوتي على الهاتف. اجعل ردودك مباشرة وقصيرة وواضحة وصالحة " +
+            "للنطق بصوت عالٍ، دون رموز أو تنسيقات. أجب بنفس لغة المستخدم. " +
+            "تفهم اللهجة الإماراتية والخليجية جيدًا وتتعامل معها بطبيعية (مثل: ودّي، أبا، " +
+            "يبتلي، شحقّه، وين، هاللحين، عساك، تكفّى)، وردّ بعربية بسيطة وسهلة. " +
+            "كثير من المستخدمين من كبار السن أو أصحاب الهمم ممّن لا يقرؤون أو لا يرون الشاشة، " +
+            "لذا تحدّث بهدوء وصبر، وأكّد كل إجراء بصوت واضح (مثل: «حاضر، أتصل بماما الآن»)، " +
+            "واسأل سؤالًا واحدًا بسيطًا عند الحاجة لمعلومة ناقصة. " +
+            "لديك أدوات للتحكم بالهاتف: فتح التطبيقات، يوتيوب، تشغيل الموسيقى، خرائط جوجل، الاتصال، واتساب، التذكير، البحث. " +
+            "عندما يطلب المستخدم إجراءً نفّذه باستدعاء الأداة المناسبة فعليًا — لا تقل إنك ستفعل " +
+            "شيئًا دون استدعاء الأداة. إن نقصت معلومة فاسأل عنها بإيجاز ثم استدعِ الأداة بعد أن يجيب. " +
+            "قدّم الإجابة النهائية فقط دون شرح لطريقة تفكيرك."
     }
 
     private fun defaultPersona(): String =
-        "أنت \"$personaName\"، مساعدة شخصية ذكية وودودة لـ مُنى. " +
-        "تتحدثين بالعربية بطلاقة وبالإنجليزية عند الحاجة، بأسلوب دافئ ومحترم ومختصر. " +
-        "تساعدين في التذكير، والإجابة عن الأسئلة، والكتابة، والترجمة، والنصائح اليومية."
+        "أنت \"$personaName\"، مساعد صوتي ذكي ودود إماراتي. " +
+        "تتحدث بالعربية بطلاقة وباللهجة الإماراتية، وبالإنجليزية عند الحاجة، بأسلوب دافئ ومحترم ومختصر. " +
+        "تساعد في فتح التطبيقات والاتصال والرسائل والتذكير والإجابة عن الأسئلة والترجمة والنصائح اليومية."
 
     companion object {
         private const val KEY_ANTHROPIC = "anthropic_key"
         private const val KEY_ELEVEN = "eleven_key"
         private const val KEY_VOICE = "voice_id"
-        private const val KEY_NAME = "persona_name"
-        private const val KEY_PERSONA = "persona"
+        // Bumped to v2 so the old "منى" persona/name are reset to مطراش.
+        private const val KEY_NAME = "persona_name2"
+        private const val KEY_PERSONA = "persona2"
         private const val KEY_SPEAK = "speak"
         private const val KEY_WAKE = "wake"
-        // Sarah — a "premade" voice usable on free-tier accounts via the API.
-        const val DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"
+        // Arabic voice chosen for مطراش (Creator-plan account).
+        const val DEFAULT_VOICE = "rUaPbzcZIu8df8iNL9WZ"
         const val LEGACY_LIBRARY_VOICE = "21m00Tcm4TlvDq8ikWAM"
-        const val DEFAULT_NAME = "منى الذكية"
+        const val DEFAULT_NAME = "مطراش"
     }
 }

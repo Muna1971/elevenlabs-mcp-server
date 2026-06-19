@@ -161,16 +161,24 @@ class AssistActivity : AppCompatActivity() {
         val executor = ClaudeClient.ToolExecutor { name, input -> Commands.exec(this, name, input) }
         val wantScreen = !screenSent
         lifecycleScope.launch {
-            // Wait briefly for the captured screen so Muna can "see" it.
-            val screen = if (wantScreen) withContext(Dispatchers.IO) { awaitScreen(1500) } else null
-            val attach = screen?.let {
+            // Wait briefly for the captured screen (image and/or text).
+            if (wantScreen) withContext(Dispatchers.IO) { awaitScreen(1500) }
+            val img = if (wantScreen) ScreenContext.recent() else null
+            val txt = if (wantScreen) ScreenContext.recentText() else null
+            if (img != null || txt != null) {
                 screenSent = true
-                toast("📷 أرى الشاشة الآن")
-                ClaudeClient.Attachment("image", it, "image/jpeg")
+                toast("📷 أشوف الشاشة")
+                // Prepend the on-screen text to the question so Muna can read it.
+                if (txt != null && convo.isNotEmpty()) {
+                    val last = convo.last()
+                    convo[convo.size - 1] = last.copy(
+                        text = "محتوى الشاشة اللي گدامي:\n\n$txt\n\n---\nسؤالي: ${last.text}"
+                    )
+                }
+            } else if (wantScreen) {
+                toast("ما أگدر أشوف الشاشة — فعّلي «تحليل الشاشة» وافتحني بالزر الجانبي")
             }
-            if (wantScreen && attach == null) {
-                toast("لا توجد لقطة شاشة — فعّلي «تحليل الشاشة» وافتحيني بالزر الجانبي")
-            }
+            val attach = img?.let { ClaudeClient.Attachment("image", it, "image/jpeg") }
             val reply = try {
                 withContext(Dispatchers.IO) { claude.complete(convo, attach, executor) }
             } catch (e: Exception) {
@@ -209,13 +217,13 @@ class AssistActivity : AppCompatActivity() {
         }
     }
 
-    private fun awaitScreen(timeoutMs: Long): String? {
+    /** Wait until the assist screen (image and/or text) is captured, or timeout. */
+    private fun awaitScreen(timeoutMs: Long) {
         val start = System.currentTimeMillis()
         while (System.currentTimeMillis() - start < timeoutMs) {
-            ScreenContext.recent()?.let { return it }
-            try { Thread.sleep(120) } catch (e: InterruptedException) { break }
+            if (ScreenContext.recent() != null || ScreenContext.recentText() != null) return
+            try { Thread.sleep(120) } catch (e: InterruptedException) { return }
         }
-        return ScreenContext.recent()
     }
 
     private fun stopPlayback() {

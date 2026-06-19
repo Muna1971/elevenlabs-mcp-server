@@ -12,15 +12,27 @@ object ScreenContext {
 
     @Volatile private var b64: String? = null
     @Volatile private var capturedAt: Long = 0
+    @Volatile private var text: String? = null
+    @Volatile private var textAt: Long = 0
 
     fun set(bitmap: Bitmap?) {
         b64 = bitmap?.let { encode(it) }
         capturedAt = System.currentTimeMillis()
     }
 
+    /** On-screen text extracted from the assist structure. */
+    fun setText(t: String?) {
+        text = t?.takeIf { it.isNotBlank() }
+        textAt = System.currentTimeMillis()
+    }
+
     /** The screenshot if captured within the last minute, else null. */
     fun recent(): String? =
         b64?.takeIf { System.currentTimeMillis() - capturedAt < 60_000 }
+
+    /** The on-screen text if captured within the last minute, else null. */
+    fun recentText(): String? =
+        text?.takeIf { System.currentTimeMillis() - textAt < 60_000 }
 
     private fun encode(src: Bitmap): String {
         var bmp = src

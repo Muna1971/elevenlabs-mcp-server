@@ -70,7 +70,8 @@ class AndroidTts(context: Context) {
     }
 
     private fun fixName(text: String): String =
-        text.replace(Regex("(?<![\\u0621-\\u064A])منى(?![\\u0621-\\u064A])"), "مُنى")
+        text.replace('ق', 'گ')
+            .replace(Regex("(?<![\\u0621-\\u064A])منى(?![\\u0621-\\u064A])"), "مُنى")
 
     fun stop() { runCatching { tts.stop() } }
 

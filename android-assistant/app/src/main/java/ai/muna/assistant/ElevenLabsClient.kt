@@ -67,9 +67,14 @@ class ElevenLabsClient(private val prefs: Prefs, private val cacheDir: File) {
         }
     }
 
-    /** Add diacritics so the name «منى» is pronounced "مُنى" (damma), not "مَنى". */
+    /**
+     * Emirati pronunciation fixes for the spoken text:
+     * - every qaf (ق) becomes گ so it is pronounced as a hard "g" (gahwa).
+     * - keep the name مُنى pronounced with damma if it appears.
+     */
     private fun fixPronunciation(text: String): String =
-        text.replace(Regex("(?<![\\u0621-\\u064A])منى(?![\\u0621-\\u064A])"), "مُنى")
+        text.replace('ق', 'گ')
+            .replace(Regex("(?<![\\u0621-\\u064A])منى(?![\\u0621-\\u064A])"), "مُنى")
 
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()

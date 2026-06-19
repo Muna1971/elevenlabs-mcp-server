@@ -37,9 +37,12 @@ class AssistActivity : AppCompatActivity() {
     private var screenSent = false
     private lateinit var androidTts: AndroidTts
 
+    private var autoStarted = false
+    private var listenRetries = 0
+
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) listen() else {
+            if (granted) { autoStarted = true; listen() } else {
                 toast(getString(R.string.mic_permission_needed)); finish()
             }
         }
@@ -59,10 +62,21 @@ class AssistActivity : AppCompatActivity() {
 
         binding.orb.setOnClickListener { listen() }
         binding.scrim.setOnClickListener { finish() }
+    }
 
+    // Start listening once the window is ready (the assist window needs focus
+    // before the recognizer can grab the mic) — no tap needed.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus || autoStarted) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             == PackageManager.PERMISSION_GRANTED
-        ) listen() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        ) {
+            autoStarted = true
+            binding.root.postDelayed({ listen() }, 350)
+        } else {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     private fun startPulse(view: View, delay: Long) {
@@ -107,13 +121,25 @@ class AssistActivity : AppCompatActivity() {
     }
 
     private val listener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onReadyForSpeech(params: Bundle?) { listenRetries = 0 }
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
-        override fun onError(error: Int) { setState(getString(R.string.assist_tap)) }
+        override fun onError(error: Int) {
+            // Transient errors (recognizer busy / client) right after opening:
+            // retry automatically instead of asking for a tap.
+            if ((error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+                    error == SpeechRecognizer.ERROR_CLIENT) && listenRetries < 3
+            ) {
+                listenRetries++
+                binding.root.postDelayed({ listen() }, 400)
+            } else {
+                setState(getString(R.string.assist_tap))
+            }
+        }
         override fun onResults(results: Bundle?) {
+            listenRetries = 0
             val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim().orEmpty()
             if (spoken.isNotEmpty()) process(spoken) else setState(getString(R.string.assist_tap))

@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.ToneGenerator
@@ -231,23 +233,45 @@ class WakeService : Service() {
         }
     }
 
+    private val audio by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
+    private var focusReq: AudioFocusRequest? = null
+    private val speechAttrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+
+    private fun grabFocus() {
+        if (focusReq != null) return
+        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(speechAttrs).build()
+        runCatching { audio.requestAudioFocus(req) }
+        focusReq = req
+    }
+
+    private fun dropFocus() {
+        focusReq?.let { runCatching { audio.abandonAudioFocusRequest(it) } }
+        focusReq = null
+    }
+
     private fun speak(text: String) {
         if (!prefs.speakReplies || text.isBlank()) { restartSoon(); return }
         working = true
         io.execute {
             val file = if (eleven.hasKey()) eleven.synthesize(text) else null
             main.post {
+                grabFocus()
                 if (file == null) {
                     // ElevenLabs unavailable → free Android voice.
-                    androidTts.speak(text) { working = false; restartSoon(300) }
+                    androidTts.speak(text) { dropFocus(); working = false; restartSoon(300) }
                     return@post
                 }
                 stopPlayback()
                 player = MediaPlayer().apply {
+                    setAudioAttributes(speechAttrs)
                     setDataSource(file.absolutePath)
                     setOnCompletionListener {
                         it.release(); if (player === it) player = null
-                        working = false; restartSoon(300)
+                        dropFocus(); working = false; restartSoon(300)
                     }
                     setOnPreparedListener { it.start() }
                     prepareAsync()

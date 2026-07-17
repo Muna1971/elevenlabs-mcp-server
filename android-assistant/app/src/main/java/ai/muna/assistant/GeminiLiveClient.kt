@@ -29,9 +29,10 @@ class GeminiLiveClient(
     private val onToolCall: (name: String, args: JSONObject) -> String
 ) {
 
+    // No pingInterval: the live session streams audio constantly, which keeps the
+    // socket alive. A control-frame ping race here previously killed good sessions.
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .pingInterval(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
@@ -72,6 +73,12 @@ class GeminiLiveClient(
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             onStatus("تعذّر الاتصال: ${t.message ?: response?.code ?: ""}")
+            running = false
+        }
+
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            // Gemini rejects a bad setup with a close frame (e.g. 1007) — surface it.
+            if (code != 1000 && reason.isNotBlank()) onStatus("انقطع الاتصال: $reason")
             running = false
         }
 
@@ -122,8 +129,10 @@ class GeminiLiveClient(
     }
 
     private fun setupMessage(): JSONObject {
+        // Native-audio models auto-detect language and REJECT an explicit
+        // languageCode (1007 close). Only pick the voice; Arabic comes from the
+        // system instruction + what the user speaks.
         val speech = JSONObject()
-            .put("languageCode", "ar-XA")
             .put("voiceConfig", JSONObject().put("prebuiltVoiceConfig",
                 JSONObject().put("voiceName", "Charon")))
         val genConfig = JSONObject()

@@ -56,8 +56,13 @@ class WakeService : Service() {
         eleven = ElevenLabsClient(prefs, cacheDir)
         androidTts = AndroidTts(this)
         startAsForeground()
-        // Spoken confirmation so she knows it's listening (then it starts listening).
-        speak("تم تفعيل وضع النداء. نادِني باسمي: مطراش.")
+        // Non-robotic "ready" cue (two soft beeps) — no synthetic voice.
+        beep()
+        main.postDelayed({ beep() }, 350)
+        main.postDelayed({ startListening() }, 950)
+        if (prefs.geminiKey.isBlank()) {
+            toast("⚠️ احفظي مفتاح Gemini في الإعدادات ليردّ مطراش بصوته المعبّر")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -161,20 +166,13 @@ class WakeService : Service() {
             restartSoon()
             return
         }
-        // With Gemini configured, hand the whole conversation to the live,
-        // expressive voice instead of the robotic on-device pipeline.
+        // Wake mode always uses the live, expressive Gemini voice — never the
+        // robotic on-device pipeline. If the key isn't saved, say so plainly.
         if (prefs.geminiKey.isNotBlank()) {
             goLive(rest)
-            return
-        }
-        if (rest.isBlank()) {
-            // She said only the name — beep and listen immediately for the command.
-            awaitingCommand = true
-            awaitingRetries = 0
-            beep()
-            startListening()
         } else {
-            process(rest)
+            toast("⚠️ احفظي مفتاح Gemini في الإعدادات ثم أعيدي تفعيل وضع النداء")
+            restartSoon()
         }
     }
 
@@ -187,6 +185,7 @@ class WakeService : Service() {
         working = true
         awaitingCommand = false
         awaitingRetries = 0
+        toast("🔴 مطراش المباشر (Gemini)…")
         beep()
         main.post { recognizer?.destroy(); recognizer = null }
         stopPlayback()

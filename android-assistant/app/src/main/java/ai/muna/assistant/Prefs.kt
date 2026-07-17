@@ -40,6 +40,10 @@ class Prefs(context: Context) {
         get() = (sp.getString(KEY_ELEVEN, "") ?: "").ifBlank { BuildConfig.ELEVEN_KEY }
         set(v) = sp.edit().putString(KEY_ELEVEN, v.trim()).apply()
 
+    var geminiKey: String
+        get() = (sp.getString(KEY_GEMINI, "") ?: "").ifBlank { BuildConfig.GEMINI_KEY }
+        set(v) = sp.edit().putString(KEY_GEMINI, v.trim()).apply()
+
     var voiceId: String
         get() {
             val v = (sp.getString(KEY_VOICE, "") ?: "")
@@ -149,6 +153,7 @@ class Prefs(context: Context) {
 
         private const val KEY_ANTHROPIC = "anthropic_key"
         private const val KEY_ELEVEN = "eleven_key"
+        private const val KEY_GEMINI = "gemini_key"
         private const val KEY_VOICE = "voice_id"
         // Bumped to v2 so the old "منى" persona/name are reset to مطراش.
         private const val KEY_NAME = "persona_name2"

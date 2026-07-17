@@ -311,6 +311,7 @@
                 android:textSize="12sp"
                 app:drawableStartCompat="@drawable/dot_online" />
 
+            <TextView android:id="@+id/navLive" style="@style/NavItem" android:text="🔴 مباشر" />
             <TextView android:id="@+id/navMeeting" style="@style/NavItem" android:text="🎧 وضع الاجتماع" />
             <TextView android:id="@+id/navNew" style="@style/NavItem" android:text="↻ محادثة جديدة" />
             <TextView android:id="@+id/navHistory" style="@style/NavItem" android:text="🕐 السجل" />

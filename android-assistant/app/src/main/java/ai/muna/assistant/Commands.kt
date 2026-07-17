@@ -29,9 +29,31 @@ object Commands {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    /** Tool declarations in Gemini function-calling format (uppercase types). */
+    fun geminiTools(): JSONArray {
+        val src = toolsJson()
+        val out = JSONArray()
+        for (i in 0 until src.length()) {
+            val t = src.getJSONObject(i)
+            val schema = t.getJSONObject("input_schema")
+            val props = schema.optJSONObject("properties") ?: JSONObject()
+            val gProps = JSONObject()
+            val keys = props.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                gProps.put(k, JSONObject().put("type", "STRING")
+                    .put("description", props.getJSONObject(k).optString("description")))
+            }
+            val params = JSONObject().put("type", "OBJECT").put("properties", gProps)
+            schema.optJSONArray("required")?.let { if (it.length() > 0) params.put("required", it) }
+            out.put(JSONObject().put("name", t.getString("name"))
+                .put("description", t.getString("description")).put("parameters", params))
+        }
+        return out
+    }
+
     /** Tool definitions sent to the Messages API. */
-    fun toolsJson(): JSONArray {
-        fun tool(name: String, desc: String, props: Map<String, String>, required: List<String>): JSONObject {
+    fun toolsJson(): JSONArray {        fun tool(name: String, desc: String, props: Map<String, String>, required: List<String>): JSONObject {
             val p = JSONObject()
             for ((k, v) in props) p.put(k, JSONObject().put("type", "string").put("description", v))
             return JSONObject().put("name", name).put("description", desc).put(

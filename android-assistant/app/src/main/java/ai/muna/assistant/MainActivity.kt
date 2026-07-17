@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         binding.cardPresent.setOnClickListener { send(getString(R.string.prompt_present)) }
 
         binding.navSettings.setOnClickListener { openSettings() }
+        binding.navLive.setOnClickListener { startActivity(Intent(this, LiveActivity::class.java)) }
         binding.navNew.setOnClickListener { newConversation() }
         binding.navMeeting.setOnClickListener { toggleMeeting() }
         binding.navHistory.setOnClickListener {

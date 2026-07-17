@@ -75,6 +75,12 @@
             android:label="@string/nav_history"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".LiveActivity"
+            android:exported="false"
+            android:label="محادثة مباشرة"
+            android:parentActivityName=".MainActivity" />
+
         <!-- ===== Digital assistant (VoiceInteractionService) ===== -->
         <!-- This is what makes the app selectable as the default device assistant. -->
         <service

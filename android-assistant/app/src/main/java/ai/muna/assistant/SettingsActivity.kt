@@ -41,6 +41,7 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.etAnthropic.setText(prefs.anthropicKey)
         binding.etEleven.setText(prefs.elevenKey)
+        binding.etGemini.setText(prefs.geminiKey)
         binding.etVoiceId.setText(prefs.voiceId)
         binding.etPersonaName.setText(prefs.personaName)
         binding.etPersona.setText(prefs.persona)
@@ -67,6 +68,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.btnSave.setOnClickListener {
             prefs.anthropicKey = binding.etAnthropic.text.toString()
             prefs.elevenKey = binding.etEleven.text.toString()
+            prefs.geminiKey = binding.etGemini.text.toString()
             prefs.voiceId = binding.etVoiceId.text.toString()
             prefs.personaName = binding.etPersonaName.text.toString()
             prefs.persona = binding.etPersona.text.toString()

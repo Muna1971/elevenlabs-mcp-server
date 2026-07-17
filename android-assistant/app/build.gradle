@@ -27,6 +27,7 @@ android {
         buildConfigField "String", "ANTHROPIC_KEY", "\"${secrets.getProperty('ANTHROPIC_KEY', '')}\""
         buildConfigField "String", "ELEVEN_KEY", "\"${secrets.getProperty('ELEVEN_KEY', '')}\""
         buildConfigField "String", "VOICE_ID", "\"${secrets.getProperty('VOICE_ID', '')}\""
+        buildConfigField "String", "GEMINI_KEY", "\"${secrets.getProperty('GEMINI_KEY', '')}\""
     }
 
     buildTypes {

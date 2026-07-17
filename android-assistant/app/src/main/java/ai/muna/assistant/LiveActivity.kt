@@ -3,6 +3,7 @@ package ai.muna.assistant
 import android.Manifest
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
@@ -51,7 +52,8 @@ class LiveActivity : AppCompatActivity() {
             apiKey = prefs.geminiKey,
             systemInstruction = prefs.systemPrompt(),
             onStatus = { s -> runOnUiThread { binding.status.text = s } },
-            onToolCall = { name, args -> Commands.exec(this, name, args) }
+            onToolCall = { name, args -> Commands.exec(this, name, args) },
+            opening = intent?.getStringExtra(EXTRA_OPENING)
         ).also { it.start() }
     }
 
@@ -75,5 +77,16 @@ class LiveActivity : AppCompatActivity() {
         super.onDestroy()
         client?.stop()
         client = null
+        // If the wake service launched us, hand the mic back so it can keep
+        // listening for the next "مطراش".
+        if (prefs.wakeEnabled) {
+            runCatching {
+                startService(Intent(this, WakeService::class.java).setAction(WakeService.ACTION_RESUME))
+            }
+        }
+    }
+
+    companion object {
+        const val EXTRA_OPENING = "opening"
     }
 }

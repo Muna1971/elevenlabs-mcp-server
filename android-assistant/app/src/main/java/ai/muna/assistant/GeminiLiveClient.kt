@@ -26,7 +26,9 @@ class GeminiLiveClient(
     private val apiKey: String,
     private val systemInstruction: String,
     private val onStatus: (String) -> Unit,
-    private val onToolCall: (name: String, args: JSONObject) -> String
+    private val onToolCall: (name: String, args: JSONObject) -> String,
+    // Optional first request (e.g. what she said right after the wake word).
+    private val opening: String? = null
 ) {
 
     // No pingInterval: the live session streams audio constantly, which keeps the
@@ -48,6 +50,16 @@ class GeminiLiveClient(
             .addHeader("x-goog-api-key", apiKey)   // supports newer AQ.* keys
             .build()
         ws = http.newWebSocket(req, listener)
+    }
+
+    /** Send a typed/opening request as a user turn (Gemini still replies with voice). */
+    fun sendText(text: String) {
+        val turns = JSONArray().put(
+            JSONObject().put("role", "user")
+                .put("parts", JSONArray().put(JSONObject().put("text", text)))
+        )
+        ws?.send(JSONObject().put("clientContent",
+            JSONObject().put("turns", turns).put("turnComplete", true)).toString())
     }
 
     fun stop() {
@@ -95,6 +107,7 @@ class GeminiLiveClient(
                 onStatus("أستمع إليك…")
                 startPlayback()
                 startCapture()
+                opening?.takeIf { it.isNotBlank() }?.let { sendText(it) }
             }
             json.has("serverContent") -> {
                 val sc = json.getJSONObject("serverContent")

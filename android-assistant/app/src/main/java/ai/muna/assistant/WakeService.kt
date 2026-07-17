@@ -62,6 +62,7 @@ class WakeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == ACTION_RESUME) { resumeAfterLive(); return START_STICKY }
         return START_STICKY
     }
 
@@ -160,6 +161,12 @@ class WakeService : Service() {
             restartSoon()
             return
         }
+        // With Gemini configured, hand the whole conversation to the live,
+        // expressive voice instead of the robotic on-device pipeline.
+        if (prefs.geminiKey.isNotBlank()) {
+            goLive(rest)
+            return
+        }
         if (rest.isBlank()) {
             // She said only the name — beep and listen immediately for the command.
             awaitingCommand = true
@@ -169,6 +176,31 @@ class WakeService : Service() {
         } else {
             process(rest)
         }
+    }
+
+    /**
+     * Wake word heard → open the Gemini Live session (expressive, hands-free).
+     * We release our own recognizer so the live client can take the mic, and
+     * resume wake-listening when the live screen closes (ACTION_RESUME).
+     */
+    private fun goLive(opening: String) {
+        working = true
+        awaitingCommand = false
+        awaitingRetries = 0
+        beep()
+        main.post { recognizer?.destroy(); recognizer = null }
+        stopPlayback()
+        val i = Intent(this, LiveActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (opening.isNotBlank()) i.putExtra(LiveActivity.EXTRA_OPENING, opening)
+        runCatching { startActivity(i) }
+    }
+
+    private fun resumeAfterLive() {
+        working = false
+        awaitingCommand = false
+        awaitingRetries = 0
+        restartSoon(400)
     }
 
     /** No command captured yet while awaiting — give her a couple more tries. */
@@ -301,6 +333,7 @@ class WakeService : Service() {
 
     companion object {
         const val ACTION_STOP = "ai.muna.assistant.STOP_WAKE"
+        const val ACTION_RESUME = "ai.muna.assistant.RESUME_WAKE"
         // Name variants the recognizer may produce for "مطراش".
         private val WAKE_TOKENS = setOf(
             "مطراش", "مطرش", "متراش", "مطراج", "مطروش", "مطرااش"

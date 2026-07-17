@@ -39,6 +39,7 @@ class WakeService : Service() {
 
     private var recognizer: SpeechRecognizer? = null
     private var player: MediaPlayer? = null
+    private var live: GeminiLiveClient? = null
     private lateinit var androidTts: AndroidTts
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -177,22 +178,33 @@ class WakeService : Service() {
     }
 
     /**
-     * Wake word heard → open the Gemini Live session (expressive, hands-free).
-     * We release our own recognizer so the live client can take the mic, and
-     * resume wake-listening when the live screen closes (ACTION_RESUME).
+     * Wake word heard → start a Gemini Live session IN THE BACKGROUND (voice
+     * only, no screen/circle) so it works hands-free while driving. We release
+     * our own recognizer so the live client can take the mic, and resume
+     * wake-listening when the session ends (idle/closed).
      */
     private fun goLive(opening: String) {
         working = true
         awaitingCommand = false
         awaitingRetries = 0
-        toast("🔴 مطراش المباشر (Gemini)…")
         beep()
         main.post { recognizer?.destroy(); recognizer = null }
         stopPlayback()
-        val i = Intent(this, LiveActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        if (opening.isNotBlank()) i.putExtra(LiveActivity.EXTRA_OPENING, opening)
-        runCatching { startActivity(i) }
+        grabFocus()
+        live?.stop()
+        live = GeminiLiveClient(
+            apiKey = prefs.geminiKey,
+            systemInstruction = prefs.systemPrompt(),
+            onStatus = { s -> toast(s) },
+            onToolCall = { name, input ->
+                val r = Commands.exec(this, name, input)
+                toast("🔧 $name → $r")
+                r
+            },
+            opening = opening.ifBlank { null },
+            onEnded = { main.post { live = null; dropFocus(); resumeAfterLive() } },
+            idleMs = 30_000L
+        ).also { it.start() }
     }
 
     private fun resumeAfterLive() {
@@ -324,6 +336,7 @@ class WakeService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        live?.stop(); live = null
         stopPlayback()
         recognizer?.destroy()
         androidTts.shutdown()

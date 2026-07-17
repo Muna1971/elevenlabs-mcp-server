@@ -28,7 +28,13 @@ class GeminiLiveClient(
     private val onStatus: (String) -> Unit,
     private val onToolCall: (name: String, args: JSONObject) -> String,
     // Optional first request (e.g. what she said right after the wake word).
-    private val opening: String? = null
+    private val opening: String? = null,
+    // Called once when the session ends (idle, closed, or failed). Used by the
+    // hands-free wake service to resume listening for the next "مطراش".
+    private val onEnded: (() -> Unit)? = null,
+    // If > 0, the session auto-closes after this many ms with no reply from
+    // Gemini (a conversation lull) — keeps the mic from staying hot forever.
+    private val idleMs: Long = 0L
 ) {
 
     // No pingInterval: the live session streams audio constantly, which keeps the
@@ -42,6 +48,8 @@ class GeminiLiveClient(
     private var record: AudioRecord? = null
     private var track: AudioTrack? = null
     @Volatile private var running = false
+    @Volatile private var ended = false
+    @Volatile private var lastReply = 0L
     private val playQueue = LinkedBlockingQueue<ByteArray>()
 
     fun start() {
@@ -86,17 +94,42 @@ class GeminiLiveClient(
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             onStatus("تعذّر الاتصال: ${t.message ?: response?.code ?: ""}")
             running = false
+            finish()
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             // Gemini rejects a bad setup with a close frame (e.g. 1007) — surface it.
             if (code != 1000 && reason.isNotBlank()) onStatus("انقطع الاتصال: $reason")
             running = false
+            finish()
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             running = false
+            finish()
         }
+    }
+
+    /** Auto-close after a lull so the mic doesn't stay open forever (wake mode). */
+    private fun startIdleWatch() {
+        Thread {
+            while (running) {
+                try { Thread.sleep(2500) } catch (e: InterruptedException) { return@Thread }
+                if (running && System.currentTimeMillis() - lastReply > idleMs) {
+                    onStatus("انتهت الجلسة")
+                    stop()
+                    finish()
+                    return@Thread
+                }
+            }
+        }.start()
+    }
+
+    /** Notify the owner exactly once that the session is over. */
+    private fun finish() {
+        if (ended) return
+        ended = true
+        onEnded?.invoke()
     }
 
     private fun handle(text: String) {
@@ -104,12 +137,15 @@ class GeminiLiveClient(
         when {
             json.has("setupComplete") -> {
                 running = true
+                lastReply = System.currentTimeMillis()
                 onStatus("أستمع إليك…")
                 startPlayback()
                 startCapture()
+                if (idleMs > 0) startIdleWatch()
                 opening?.takeIf { it.isNotBlank() }?.let { sendText(it) }
             }
             json.has("serverContent") -> {
+                lastReply = System.currentTimeMillis()
                 val sc = json.getJSONObject("serverContent")
                 if (sc.optBoolean("interrupted")) playQueue.clear()
                 sc.optJSONObject("modelTurn")?.optJSONArray("parts")?.let { parts ->
@@ -123,6 +159,7 @@ class GeminiLiveClient(
                 }
             }
             json.has("toolCall") -> {
+                lastReply = System.currentTimeMillis()
                 val calls = json.getJSONObject("toolCall").optJSONArray("functionCalls") ?: return
                 val responses = JSONArray()
                 for (i in 0 until calls.length()) {

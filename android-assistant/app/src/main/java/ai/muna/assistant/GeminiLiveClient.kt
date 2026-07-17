@@ -42,7 +42,10 @@ class GeminiLiveClient(
     private val playQueue = LinkedBlockingQueue<ByteArray>()
 
     fun start() {
-        val req = Request.Builder().url(WS_URL + apiKey).build()
+        val req = Request.Builder()
+            .url(WS_URL + apiKey)
+            .addHeader("x-goog-api-key", apiKey)   // supports newer AQ.* keys
+            .build()
         ws = http.newWebSocket(req, listener)
     }
 
@@ -192,8 +195,8 @@ class GeminiLiveClient(
     }
 
     companion object {
-        // Native-audio dialog model = the most expressive (sighs, tone, pauses).
-        private const val MODEL = "gemini-2.5-flash-preview-native-audio-dialog"
+        // Native-audio model = the most expressive (sighs, tone, pauses).
+        private const val MODEL = "gemini-2.5-flash-native-audio-latest"
         private const val WS_URL =
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key="
     }

@@ -23,6 +23,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var prefs: Prefs
     private var player: MediaPlayer? = null
+    private var testClient: GeminiLiveClient? = null
 
     private val wakePermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -102,8 +103,44 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun testVoice() {
+        // Persist typed keys first so the test uses the current values.
+        prefs.geminiKey = binding.etGemini.text.toString()
         prefs.elevenKey = binding.etEleven.text.toString()
         prefs.voiceId = binding.etVoiceId.text.toString()
+        prefs.personaName = binding.etPersonaName.text.toString()
+        prefs.persona = binding.etPersona.text.toString()
+        prefs.addressee = binding.spAddressee.selectedItemPosition
+        when {
+            prefs.geminiKey.isNotBlank() -> testGeminiVoice()
+            prefs.elevenKey.isNotBlank() -> testElevenVoice()
+            else -> binding.voiceResult.text = "أضيفي مفتاح Gemini (أو ElevenLabs) أولًا"
+        }
+    }
+
+    /** Hear Matrash's real (Gemini) voice — no microphone needed. */
+    private fun testGeminiVoice() {
+        binding.voiceResult.text = "جارٍ اختبار صوت مطراش (Gemini)…"
+        testClient?.stop()
+        testClient = GeminiLiveClient(
+            apiKey = prefs.geminiKey,
+            systemInstruction = prefs.systemPrompt(),
+            onStatus = { s ->
+                val msg = when {
+                    s.contains("أستمع") -> "🔊 يتكلّم مطراش الآن…"
+                    s.contains("انتهت") -> "✅ نجح — سمعتِ صوت مطراش؟"
+                    else -> s
+                }
+                runOnUiThread { binding.voiceResult.text = msg }
+            },
+            onToolCall = { _, _ -> "" },
+            opening = "اختبار سريع: رحّب بإيجاز في جملة واحدة وقل إنك مطراش مساعدها الصوتي.",
+            onEnded = { runOnUiThread { testClient = null } },
+            idleMs = 6000L,
+            captureMic = false
+        ).also { it.start() }
+    }
+
+    private fun testElevenVoice() {
         val eleven = ElevenLabsClient(prefs, cacheDir)
         binding.voiceResult.text = "جارٍ الاختبار…"
         lifecycleScope.launch {
@@ -128,5 +165,6 @@ class SettingsActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         player?.release(); player = null
+        testClient?.stop(); testClient = null
     }
 }

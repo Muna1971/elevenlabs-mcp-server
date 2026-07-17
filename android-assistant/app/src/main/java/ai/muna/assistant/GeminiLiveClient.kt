@@ -34,7 +34,10 @@ class GeminiLiveClient(
     private val onEnded: (() -> Unit)? = null,
     // If > 0, the session auto-closes after this many ms with no reply from
     // Gemini (a conversation lull) — keeps the mic from staying hot forever.
-    private val idleMs: Long = 0L
+    private val idleMs: Long = 0L,
+    // false = don't open the microphone (used by the "test voice" button, which
+    // only needs to hear Gemini speak the opening line).
+    private val captureMic: Boolean = true
 ) {
 
     // No pingInterval: the live session streams audio constantly, which keeps the
@@ -140,7 +143,7 @@ class GeminiLiveClient(
                 lastReply = System.currentTimeMillis()
                 onStatus("أستمع إليك…")
                 startPlayback()
-                startCapture()
+                if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
                 opening?.takeIf { it.isNotBlank() }?.let { sendText(it) }
             }

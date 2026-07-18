@@ -36,13 +36,14 @@ class AssistActivity : AppCompatActivity() {
     private var player: MediaPlayer? = null
     private var screenSent = false
     private lateinit var androidTts: AndroidTts
+    private var live: GeminiLiveClient? = null
 
     private var autoStarted = false
     private var listenRetries = 0
 
     private val micPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) { autoStarted = true; listen() } else {
+            if (granted) { autoStarted = true; startAssist() } else {
                 toast(getString(R.string.mic_permission_needed)); finish()
             }
         }
@@ -60,7 +61,7 @@ class AssistActivity : AppCompatActivity() {
         startPulse(binding.ring1, 0)
         startPulse(binding.ring2, 400)
 
-        binding.orb.setOnClickListener { listen() }
+        binding.orb.setOnClickListener { if (live == null) listen() }
         binding.scrim.setOnClickListener { finish() }
     }
 
@@ -73,9 +74,42 @@ class AssistActivity : AppCompatActivity() {
             == PackageManager.PERMISSION_GRANTED
         ) {
             autoStarted = true
-            binding.root.postDelayed({ listen() }, 350)
+            binding.root.postDelayed({ startAssist() }, 350)
         } else {
             micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    /**
+     * Prefer the expressive Gemini voice (same as the Live button / wake word).
+     * The captured on-screen text is fed into Gemini's context so she can ask
+     * about what's on screen. Falls back to the on-device pipeline only if no
+     * Gemini key is set.
+     */
+    private fun startAssist() {
+        if (prefs.geminiKey.isBlank()) { listen(); return }
+        setState(getString(R.string.thinking))
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { awaitScreen(1500) }
+            val txt = ScreenContext.recentText()
+            if (txt != null) toast("📷 أشوف الشاشة")
+            val instruction = buildString {
+                append(prefs.systemPrompt())
+                if (!txt.isNullOrBlank()) {
+                    append("\n\n[محتوى الشاشة الحالية أمام المستخدمة الآن]:\n")
+                    append(txt)
+                    append("\n[انتهى محتوى الشاشة — أجب عن أسئلتها المتعلّقة به]")
+                }
+            }
+            live?.stop()
+            live = GeminiLiveClient(
+                apiKey = prefs.geminiKey,
+                systemInstruction = instruction,
+                onStatus = { s -> runOnUiThread { setState(s) } },
+                onToolCall = { name, input -> Commands.exec(this@AssistActivity, name, input) },
+                onEnded = { runOnUiThread { if (!isFinishing) finish() } },
+                idleMs = 30_000L
+            ).also { it.start() }
         }
     }
 
@@ -235,6 +269,7 @@ class AssistActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        live?.stop(); live = null
         stopPlayback()
         recognizer?.destroy()
         androidTts.shutdown()

@@ -56,11 +56,6 @@ class GeminiLiveClient(
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private var savedMode = AudioManager.MODE_NORMAL
-    private var savedSpeaker = false
-    private var routed = false
-
     private var ws: WebSocket? = null
     private var record: AudioRecord? = null
     private var track: AudioTrack? = null
@@ -125,7 +120,12 @@ class GeminiLiveClient(
         }
     }
 
-    fun stop() {
+    fun stop() = endSession(notify = false)
+
+    /** Release everything on ANY end path (also restores nothing to "call" mode). */
+    private fun endSession(notify: Boolean) {
+        val already = ended
+        ended = true
         running = false
         runCatching { ws?.close(1000, "bye") }
         ws = null
@@ -134,51 +134,7 @@ class GeminiLiveClient(
         runCatching { track?.stop(); track?.release() }
         track = null
         playQueue.clear()
-        restoreAudioRoute()
-    }
-
-    /**
-     * Force Matrash's voice onto the LOUDSPEAKER (or car Bluetooth) instead of
-     * the earpiece. Using a VOICE_COMMUNICATION mic puts the device in call
-     * routing, which otherwise sends the reply to the ear speaker — sounding
-     * like "no sound" on a phone held normally.
-     */
-    private fun setupAudioRoute() {
-        if (routed) return
-        routed = true
-        runCatching {
-            savedMode = audioManager.mode
-            @Suppress("DEPRECATION")
-            savedSpeaker = audioManager.isSpeakerphoneOn
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val devices = audioManager.availableCommunicationDevices
-                // Prefer a connected headset/car (Bluetooth/wired); else speaker.
-                val preferred = devices.firstOrNull {
-                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
-                } ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                preferred?.let { audioManager.setCommunicationDevice(it) }
-            } else {
-                @Suppress("DEPRECATION")
-                audioManager.isSpeakerphoneOn = true
-            }
-        }
-    }
-
-    private fun restoreAudioRoute() {
-        if (!routed) return
-        routed = false
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                audioManager.clearCommunicationDevice()
-            } else {
-                @Suppress("DEPRECATION")
-                audioManager.isSpeakerphoneOn = savedSpeaker
-            }
-            audioManager.mode = savedMode
-        }
+        if (notify && !already) onEnded?.invoke()
     }
 
     private val listener = object : WebSocketListener() {
@@ -218,7 +174,6 @@ class GeminiLiveClient(
                 try { Thread.sleep(2500) } catch (e: InterruptedException) { return@Thread }
                 if (running && System.currentTimeMillis() - lastReply > idleMs) {
                     onStatus("انتهت الجلسة")
-                    stop()
                     finish()
                     return@Thread
                 }
@@ -226,12 +181,8 @@ class GeminiLiveClient(
         }.start()
     }
 
-    /** Notify the owner exactly once that the session is over. */
-    private fun finish() {
-        if (ended) return
-        ended = true
-        onEnded?.invoke()
-    }
+    /** Notify the owner exactly once that the session is over (and clean up). */
+    private fun finish() = endSession(notify = true)
 
     private fun handle(text: String) {
         val json = runCatching { JSONObject(text) }.getOrNull() ?: return
@@ -240,7 +191,6 @@ class GeminiLiveClient(
                 running = true
                 lastReply = System.currentTimeMillis()
                 onStatus("أستمع إليك…")
-                setupAudioRoute()
                 startPlayback()
                 if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
@@ -322,7 +272,11 @@ class GeminiLiveClient(
             val buf = ByteArray(maxOf(minBuf, 3200))
             val rec = try {
                 AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION, 16000,
+                    // Plain MIC (not VOICE_COMMUNICATION) so the system does NOT
+                    // enter "call" audio routing — that made other apps (WhatsApp
+                    // voice notes) think a call was active, and sent our voice to
+                    // the earpiece. Echo/noise are handled by the effects below.
+                    MediaRecorder.AudioSource.MIC, 16000,
                     AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, buf.size * 2
                 )
             } catch (e: SecurityException) { return@Thread }
@@ -361,7 +315,9 @@ class GeminiLiveClient(
         )
         val t = AudioTrack(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                // MEDIA usage plays on the loudspeaker (or Bluetooth) in normal
+                // mode — audible, and without pretending to be a phone call.
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
             AudioFormat.Builder().setSampleRate(24000)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)

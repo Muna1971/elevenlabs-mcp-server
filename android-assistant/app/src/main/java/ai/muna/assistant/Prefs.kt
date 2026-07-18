@@ -76,9 +76,27 @@ class Prefs(context: Context) {
 
     fun systemPrompt(): String {
         val base = persona.ifBlank { defaultPersona() }
-        return base + "\n\n" +
+        return base + "\n\n" + timeContext() + "\n\n" +
             "طريقة المخاطبة (هذه القاعدة هي المرجع الوحيد، التزم بها حرفيًا في كل ردودك وتجاهل أي صيغة مخالفة):\n" +
             addresseeRule() + "\n\n" + TAFKHEEM + "\n\n" + DIALECT_GUIDE
+    }
+
+    /** Current local (UAE) time + Arabic time rules so reminders are exact. */
+    private fun timeContext(): String {
+        val zone = java.util.TimeZone.getTimeZone("Asia/Dubai")
+        val now = java.util.Calendar.getInstance(zone)
+        val h = now.get(java.util.Calendar.HOUR_OF_DAY)
+        val m = now.get(java.util.Calendar.MINUTE)
+        val fmt = java.text.SimpleDateFormat("EEEE d MMMM yyyy", java.util.Locale("ar")).apply {
+            timeZone = zone
+        }
+        val date = fmt.format(now.time)
+        return "الوقت الآن بتوقيت الإمارات (UTC+4): %02d:%02d — %s.\n".format(h, m, date) +
+            "عند ضبط أي تذكير/منبّه استعمل هذا التوقيت المحلي ونظام 24 ساعة. " +
+            "قواعد الوقت بالعربي: «وربع» = :15، «والنص/والنصف» = :30، «وثلث» = :20، " +
+            "«إلا ربع» = :45 من الساعة السابقة، «إلا ثلث» = :40 من الساعة السابقة. " +
+            "«ظهرًا/بعد الظهر/العصر/المغرب/المساء» تعني إضافة 12 للساعة (مثال: 2:15 ظهرًا = 14:15)، " +
+            "و«صباحًا/الفجر» تبقى كما هي. مرّر hour وminute بدقّة حسب ما نطقته المستخدمة."
     }
 
     private fun addresseeRule(): String = when (addressee) {

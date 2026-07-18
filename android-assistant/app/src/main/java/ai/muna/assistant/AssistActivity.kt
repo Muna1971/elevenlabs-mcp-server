@@ -61,7 +61,11 @@ class AssistActivity : AppCompatActivity() {
         startPulse(binding.ring1, 0)
         startPulse(binding.ring2, 400)
 
-        binding.orb.setOnClickListener { if (live == null) listen() }
+        // Tapping the orb just (re)starts the Gemini session — never the old
+        // robotic voice, so the side-key sounds identical to wake/live.
+        binding.orb.setOnClickListener {
+            if (live == null && prefs.geminiKey.isNotBlank()) startAssist()
+        }
         binding.scrim.setOnClickListener { finish() }
     }
 
@@ -87,11 +91,14 @@ class AssistActivity : AppCompatActivity() {
      * Gemini key is set.
      */
     private fun startAssist() {
-        if (prefs.geminiKey.isBlank()) { listen(); return }
+        // Gemini only — same expressive voice as wake mode and the Live button.
+        if (prefs.geminiKey.isBlank()) {
+            setState("أضيفي مفتاح Gemini في الإعدادات أولًا"); return
+        }
         setState(getString(R.string.thinking))
         lifecycleScope.launch {
             val frames = withContext(Dispatchers.IO) {
-                awaitScreen(1500); listOfNotNull(ScreenContext.recent())
+                awaitScreen(900); listOfNotNull(ScreenContext.recent())
             }
             val txt = ScreenContext.recentText()
             if (txt != null || frames.isNotEmpty()) toast("📷 أشوف الشاشة")

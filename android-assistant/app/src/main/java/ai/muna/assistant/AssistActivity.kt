@@ -91,9 +91,7 @@ class AssistActivity : AppCompatActivity() {
         setState(getString(R.string.thinking))
         lifecycleScope.launch {
             val frames = withContext(Dispatchers.IO) {
-                val proj = ScreenProjectionService.instance
-                if (proj != null) proj.captureFrames(3, 550)
-                else { awaitScreen(1500); listOfNotNull(ScreenContext.recent()) }
+                awaitScreen(1500); listOfNotNull(ScreenContext.recent())
             }
             val txt = ScreenContext.recentText()
             if (txt != null || frames.isNotEmpty()) toast("📷 أشوف الشاشة")

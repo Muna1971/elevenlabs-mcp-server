@@ -150,20 +150,6 @@
             android:textColor="@color/text_muted"
             android:textSize="12sp" />
 
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/swScreenRead"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="قراءة الشاشة (يقرأ أي تطبيق — تغريدات، أخبار…)" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="يطلب إذنًا مرّة واحدة لالتقاط الشاشة عند الطلب فقط. لا يسجّل. أعيدي تفعيله بعد إعادة تشغيل الهاتف."
-            android:textColor="@color/text_muted"
-            android:textSize="12sp" />
 
         <TextView
             android:layout_width="wrap_content"

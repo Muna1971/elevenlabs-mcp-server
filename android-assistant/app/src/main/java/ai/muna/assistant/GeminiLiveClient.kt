@@ -69,6 +69,9 @@ class GeminiLiveClient(
     @Volatile private var speaking = false
     @Volatile private var lastReply = 0L
     private val playQueue = LinkedBlockingQueue<ByteArray>()
+    private val firstTurnLock = Any()
+    private var setupDone = false
+    private var pendingFirst: Pair<List<String>, String?>? = null
 
     fun start() {
         val req = Request.Builder()
@@ -99,6 +102,27 @@ class GeminiLiveClient(
         )
         ws?.send(JSONObject().put("clientContent",
             JSONObject().put("turns", turns).put("turnComplete", true)).toString())
+    }
+
+    /**
+     * Queue the first turn (her request + optional screenshots). If the session
+     * is already connected it's sent now, otherwise on setupComplete. This lets
+     * the caller connect the voice session immediately and capture the screen in
+     * parallel — voice is never blocked by (or dependent on) screen capture.
+     */
+    fun pushFirstTurn(images: List<String>, text: String?) {
+        synchronized(firstTurnLock) {
+            if (setupDone) sendFirstTurn(images, text) else pendingFirst = images to text
+        }
+    }
+
+    private fun sendFirstTurn(images: List<String>, text: String?) {
+        when {
+            images.isNotEmpty() -> sendImagesWithText(images,
+                text?.takeIf { it.isNotBlank() }
+                    ?: "صِف للمستخدمة ما تراه في هذي اللقطات من شاشتها.")
+            !text.isNullOrBlank() -> sendText(text)
+        }
     }
 
     fun stop() {
@@ -220,13 +244,16 @@ class GeminiLiveClient(
                 startPlayback()
                 if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
-                val hasImg = openingImages.isNotEmpty()
-                val hasTxt = !opening.isNullOrBlank()
-                when {
-                    hasImg -> sendImagesWithText(openingImages,
+                if (openingImages.isNotEmpty()) {
+                    sendImagesWithText(openingImages,
                         opening?.takeIf { it.isNotBlank() }
                             ?: "صِف للمستخدمة ما تراه في هذي اللقطات من شاشتها.")
-                    hasTxt -> sendText(opening!!)
+                } else if (!opening.isNullOrBlank()) {
+                    sendText(opening)
+                }
+                synchronized(firstTurnLock) {
+                    setupDone = true
+                    pendingFirst?.let { sendFirstTurn(it.first, it.second); pendingFirst = null }
                 }
             }
             json.has("serverContent") -> {

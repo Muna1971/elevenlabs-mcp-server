@@ -191,50 +191,41 @@ class WakeService : Service() {
         main.post { recognizer?.destroy(); recognizer = null }
         stopPlayback()
         grabFocus()
-        // Read the screen ON DEMAND. Screen capture (if granted) reads ANY app —
-        // photos, video, social media — in a brief burst then releases (no drain).
-        // Otherwise fall back to the assist API (text/screenshot).
-        ScreenContext.clear()
-        val projection = ScreenProjectionService.instance
-        if (projection == null) runCatching { MunaVoiceInteractionService.instance?.captureScreen() }
-        io.execute {
-            val frames = if (projection != null) projection.captureFrames(3, 500)
-            else { awaitScreen(1400); listOfNotNull(ScreenContext.recent()) }
-            val txt = ScreenContext.recentText()
-            main.post {
-                toast(if (frames.isNotEmpty()) "✓ شفت الشاشة (${frames.size})"
-                      else if (!txt.isNullOrBlank()) "نص فقط — بدون صورة"
-                      else "⚠️ ما شفت الشاشة — فعّلي «قراءة الشاشة»")
-                startLiveWith(opening, txt, frames)
-            }
-        }
-    }
-
-    private fun startLiveWith(opening: String, screenText: String?, screenImages: List<String>) {
-        val instruction = buildString {
-            append(prefs.systemPrompt())
-            if (!screenText.isNullOrBlank()) {
-                append("\n\n[محتوى الشاشة الحالية أمام المستخدمة الآن]:\n")
-                append(screenText)
-                append("\n[انتهى محتوى الشاشة — أجب عن أسئلتها المتعلّقة به]")
-            }
-        }
+        // Connect the voice session IMMEDIATELY so it always responds — never
+        // blocked by (or dependent on) screen capture.
         live?.stop()
-        live = GeminiLiveClient(
+        val client = GeminiLiveClient(
             context = this,
             apiKey = prefs.geminiKey,
-            systemInstruction = instruction,
+            systemInstruction = prefs.systemPrompt(),
             onStatus = { s -> toast(s) },
             onToolCall = { name, input ->
                 val r = Commands.exec(this, name, input)
                 toast("🔧 $name → $r")
                 r
             },
-            opening = opening.ifBlank { null },
-            openingImages = screenImages,
             onEnded = { main.post { live = null; dropFocus(); resumeAfterLive() } },
             idleMs = 30_000L
-        ).also { it.start() }
+        )
+        live = client
+        client.start()
+
+        // Grab the screen in PARALLEL and inject it (with her request) once ready.
+        val projection = ScreenProjectionService.instance
+        if (projection == null) {
+            // No screen capture configured — just send her request.
+            client.pushFirstTurn(emptyList(), opening)
+        } else {
+            ScreenContext.clear()
+            io.execute {
+                val frames = try { projection.captureFrames(3, 400) } catch (e: Exception) { emptyList() }
+                main.post {
+                    toast(if (frames.isNotEmpty()) "✓ شفت الشاشة" else "⚠️ ما شفت الشاشة")
+                    // Same client instance (unless the session already ended).
+                    if (live === client) client.pushFirstTurn(frames, opening)
+                }
+            }
+        }
     }
 
     /** Wait briefly for the silent screen capture (text and/or screenshot). */

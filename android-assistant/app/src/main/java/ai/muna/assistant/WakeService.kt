@@ -108,18 +108,24 @@ class WakeService : Service() {
     private fun startListening() {
         if (working) return
         main.post {
-            if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
-            recognizer?.destroy()
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                setRecognitionListener(listener)
+            // Reuse ONE recognizer instead of destroy/recreate each cycle — the
+            // churn is what makes media (YouTube) duck and stutter. Prefer the
+            // on-device engine so it's lighter on audio while music plays.
+            if (recognizer == null) {
+                if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
+                recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                    setRecognitionListener(listener)
+                }
             }
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-AE")
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar-AE")
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L)
             }
+            runCatching { recognizer?.cancel() }
             runCatching { recognizer?.startListening(intent) }
         }
     }
@@ -227,6 +233,8 @@ class WakeService : Service() {
     }
 
     private fun beep() {
+        // Don't punch a beep through a playing video/song — it causes stutter.
+        if (audio.isMusicActive) return
         runCatching {
             val tone = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
             tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150)

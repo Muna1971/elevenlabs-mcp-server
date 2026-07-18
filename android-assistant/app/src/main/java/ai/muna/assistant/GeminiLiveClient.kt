@@ -6,6 +6,8 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.util.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -220,6 +222,17 @@ class GeminiLiveClient(
                 )
             } catch (e: SecurityException) { return@Thread }
             record = rec
+            // Cancel the media echo so she's understood while music/video plays,
+            // and the mic doesn't feed the playback back into Gemini.
+            val sid = rec.audioSessionId
+            runCatching {
+                if (AcousticEchoCanceler.isAvailable())
+                    AcousticEchoCanceler.create(sid)?.enabled = true
+            }
+            runCatching {
+                if (NoiseSuppressor.isAvailable())
+                    NoiseSuppressor.create(sid)?.enabled = true
+            }
             runCatching { rec.startRecording() }
             while (running) {
                 val n = rec.read(buf, 0, buf.size)

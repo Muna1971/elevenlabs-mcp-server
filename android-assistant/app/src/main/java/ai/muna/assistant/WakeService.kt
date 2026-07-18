@@ -191,11 +191,30 @@ class WakeService : Service() {
         main.post { recognizer?.destroy(); recognizer = null }
         stopPlayback()
         grabFocus()
+        // Silently grab the current screen (like the side-key assistant) so she
+        // can say "اقرأ الأخبار على الشاشة" hands-free.
+        ScreenContext.clear()
+        runCatching { MunaVoiceInteractionService.instance?.captureScreen() }
+        io.execute {
+            val screen = awaitScreenText(1400)
+            main.post { startLiveWith(opening, screen) }
+        }
+    }
+
+    private fun startLiveWith(opening: String, screenText: String?) {
+        val instruction = buildString {
+            append(prefs.systemPrompt())
+            if (!screenText.isNullOrBlank()) {
+                append("\n\n[محتوى الشاشة الحالية أمام المستخدمة الآن]:\n")
+                append(screenText)
+                append("\n[انتهى محتوى الشاشة — أجب عن أسئلتها المتعلّقة به]")
+            }
+        }
         live?.stop()
         live = GeminiLiveClient(
             context = this,
             apiKey = prefs.geminiKey,
-            systemInstruction = prefs.systemPrompt(),
+            systemInstruction = instruction,
             onStatus = { s -> toast(s) },
             onToolCall = { name, input ->
                 val r = Commands.exec(this, name, input)
@@ -206,6 +225,16 @@ class WakeService : Service() {
             onEnded = { main.post { live = null; dropFocus(); resumeAfterLive() } },
             idleMs = 30_000L
         ).also { it.start() }
+    }
+
+    /** Wait briefly for the silent screen capture to arrive. */
+    private fun awaitScreenText(timeoutMs: Long): String? {
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            ScreenContext.recentText()?.let { return it }
+            try { Thread.sleep(120) } catch (e: InterruptedException) { return null }
+        }
+        return ScreenContext.recentText()
     }
 
     private fun resumeAfterLive() {

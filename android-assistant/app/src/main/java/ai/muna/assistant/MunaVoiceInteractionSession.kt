@@ -21,18 +21,26 @@ class MunaVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
 
     private val main = Handler(Looper.getMainLooper())
     private var launched = false
+    // Wake mode captures the screen silently (no orb).
+    private var captureOnly = false
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
         launched = false
-        // Fallback: open even if no screen data arrives (toggles off).
-        main.postDelayed({ launchOrb() }, 800)
+        captureOnly = args?.getBoolean(MunaVoiceInteractionService.EXTRA_CAPTURE_ONLY, false) == true
+        if (captureOnly) {
+            // Just grab the screen into ScreenContext, then vanish — no UI.
+            main.postDelayed({ runCatching { hide() } }, 1000)
+        } else {
+            // Fallback: open even if no screen data arrives (toggles off).
+            main.postDelayed({ launchOrb() }, 800)
+        }
     }
 
     override fun onHandleScreenshot(screenshot: Bitmap?) {
         super.onHandleScreenshot(screenshot)
         ScreenContext.set(screenshot)
-        launchOrb()
+        if (captureOnly) runCatching { hide() } else launchOrb()
     }
 
     // API 29+ delivers assist data here.
@@ -40,7 +48,7 @@ class MunaVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     override fun onHandleAssist(state: AssistState) {
         super.onHandleAssist(state)
         runCatching { extractText(state.assistStructure) }
-        launchOrb()
+        if (captureOnly) runCatching { hide() } else launchOrb()
     }
 
     // Older devices use this signature.
@@ -52,7 +60,7 @@ class MunaVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     ) {
         super.onHandleAssist(data, structure, content)
         runCatching { extractText(structure) }
-        launchOrb()
+        if (captureOnly) runCatching { hide() } else launchOrb()
     }
 
     private fun extractText(structure: AssistStructure?) {

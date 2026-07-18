@@ -26,6 +26,12 @@ object ScreenContext {
         textAt = System.currentTimeMillis()
     }
 
+    /** Drop any stale capture so the next read only sees a fresh one. */
+    fun clear() {
+        b64 = null; text = null
+        capturedAt = 0; textAt = 0
+    }
+
     /** The screenshot if captured within the last minute, else null. */
     fun recent(): String? =
         b64?.takeIf { System.currentTimeMillis() - capturedAt < 60_000 }

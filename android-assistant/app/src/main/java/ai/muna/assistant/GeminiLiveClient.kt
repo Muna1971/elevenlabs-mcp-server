@@ -35,8 +35,9 @@ class GeminiLiveClient(
     private val onToolCall: (name: String, args: JSONObject) -> String,
     // Optional first request (e.g. what she said right after the wake word).
     private val opening: String? = null,
-    // Optional screenshot (base64 JPEG) so Matrash can "see" the screen.
-    private val openingImage: String? = null,
+    // Optional screenshots (base64 JPEG) so Matrash can "see" the screen —
+    // several frames let it understand a moving video.
+    private val openingImages: List<String> = emptyList(),
     // Called once when the session ends (idle, closed, or failed). Used by the
     // hands-free wake service to resume listening for the next "مطراش".
     private val onEnded: (() -> Unit)? = null,
@@ -77,24 +78,14 @@ class GeminiLiveClient(
         ws = http.newWebSocket(req, listener)
     }
 
-    /** Give Gemini the current screenshot as context (doesn't force a reply). */
-    fun sendImage(b64Jpeg: String) {
+    /** Send one or more screenshots AND the request together as one complete turn. */
+    fun sendImagesWithText(images: List<String>, text: String) {
         val parts = JSONArray()
-            .put(JSONObject().put("inlineData", JSONObject()
-                .put("mimeType", "image/jpeg").put("data", b64Jpeg)))
-            .put(JSONObject().put("text",
-                "هذي لقطة من شاشة المستخدمة الآن. اقرأها واستعملها للإجابة عن سؤالها."))
-        val turns = JSONArray().put(JSONObject().put("role", "user").put("parts", parts))
-        ws?.send(JSONObject().put("clientContent",
-            JSONObject().put("turns", turns).put("turnComplete", false)).toString())
-    }
-
-    /** Send the screenshot AND the request together as one complete turn. */
-    fun sendImageWithText(b64Jpeg: String, text: String) {
-        val parts = JSONArray()
-            .put(JSONObject().put("inlineData", JSONObject()
-                .put("mimeType", "image/jpeg").put("data", b64Jpeg)))
-            .put(JSONObject().put("text", text))
+        for (b64 in images) {
+            parts.put(JSONObject().put("inlineData", JSONObject()
+                .put("mimeType", "image/jpeg").put("data", b64)))
+        }
+        parts.put(JSONObject().put("text", text))
         val turns = JSONArray().put(JSONObject().put("role", "user").put("parts", parts))
         ws?.send(JSONObject().put("clientContent",
             JSONObject().put("turns", turns).put("turnComplete", true)).toString())
@@ -229,12 +220,13 @@ class GeminiLiveClient(
                 startPlayback()
                 if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
-                val hasImg = !openingImage.isNullOrBlank()
+                val hasImg = openingImages.isNotEmpty()
                 val hasTxt = !opening.isNullOrBlank()
                 when {
-                    hasImg && hasTxt -> sendImageWithText(openingImage!!, opening!!)
+                    hasImg -> sendImagesWithText(openingImages,
+                        opening?.takeIf { it.isNotBlank() }
+                            ?: "صِف للمستخدمة ما تراه في هذي اللقطات من شاشتها.")
                     hasTxt -> sendText(opening!!)
-                    hasImg -> sendImage(openingImage!!)
                 }
             }
             json.has("serverContent") -> {

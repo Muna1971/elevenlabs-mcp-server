@@ -81,7 +81,7 @@ class Prefs(context: Context) {
 
     fun systemPrompt(): String {
         val base = persona.ifBlank { defaultPersona() }
-        return base + "\n\n" + timeContext() + "\n\n" +
+        return base + "\n\n" + VISION_NOTE + "\n\n" + timeContext() + "\n\n" +
             "طريقة المخاطبة (هذه القاعدة هي المرجع الوحيد، التزم بها حرفيًا في كل ردودك وتجاهل أي صيغة مخالفة):\n" +
             addresseeRule() + "\n\n" + TAFKHEEM + "\n\n" + DIALECT_GUIDE
     }
@@ -135,6 +135,15 @@ class Prefs(context: Context) {
         "والرسائل وتشغيل الأغاني والتذكير والإجابة عن الأسئلة والترجمة والنصائح اليومية."
 
     companion object {
+        // Tell the model it genuinely can see the screen (via screenshots), so
+        // it describes content instead of refusing ("I can't see a video").
+        private const val VISION_NOTE =
+            "قدرة الرؤية: قد تصلك لقطات (صور) من شاشة المستخدمة الحالية. حين تصلك، أنت ترى محتواها فعلًا — " +
+            "صِف ما فيها وأجب عن سؤالها بثقة (نص، تغريدات، بوستات، أخبار، مشهد فيديو). " +
+            "لا تقل أبدًا إنك «لا تقدر ترى الشاشة أو الفيديو»؛ استعمل اللقطات الموجودة. " +
+            "وإذا وصلتك عدّة لقطات متتابعة، فهي مشاهد من فيديو متحرّك — استنتج منها ما يجري ولخّصه للمستخدمة. " +
+            "أما صوت الفيديو فلا تسمعه، فاعتمد على ما تراه في اللقطات."
+
         // Heavy Bedouin articulation + the corrected phrasing.
         private const val TAFKHEEM =
             "انطق كل الحروف بتفخيم بدوي ثقيل ومتساوٍ (حتى الميم والباء) بلا أي حرف مرقّق، بصوت رزين متمهّل وقور. " +

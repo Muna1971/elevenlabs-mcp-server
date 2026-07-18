@@ -198,23 +198,22 @@ class WakeService : Service() {
         val projection = ScreenProjectionService.instance
         if (projection == null) runCatching { MunaVoiceInteractionService.instance?.captureScreen() }
         io.execute {
-            if (projection != null) projection.captureFrame() else awaitScreen(2500)
+            val frames = if (projection != null) projection.captureFrames(3, 550)
+            else { awaitScreen(2500); listOfNotNull(ScreenContext.recent()) }
             val txt = ScreenContext.recentText()
-            val img = ScreenContext.recent()
             main.post {
                 val msg = when {
-                    img != null && !txt.isNullOrBlank() -> "✓ صورة + نص (${txt.length} حرف)"
-                    img != null -> "✓ صورة الشاشة"
+                    frames.isNotEmpty() -> "✓ صورة الشاشة (${frames.size})"
                     !txt.isNullOrBlank() -> "نص فقط ${txt.length} حرف — بدون صورة!"
-                    else -> "⚠️ ما التقطت الشاشة — فعّلي «تحليل النص/الصور»"
+                    else -> "⚠️ ما التقطت الشاشة — فعّلي «قراءة الشاشة»"
                 }
                 toast(msg)
-                startLiveWith(opening, txt, img)
+                startLiveWith(opening, txt, frames)
             }
         }
     }
 
-    private fun startLiveWith(opening: String, screenText: String?, screenImage: String?) {
+    private fun startLiveWith(opening: String, screenText: String?, screenImages: List<String>) {
         val instruction = buildString {
             append(prefs.systemPrompt())
             if (!screenText.isNullOrBlank()) {
@@ -235,7 +234,7 @@ class WakeService : Service() {
                 r
             },
             opening = opening.ifBlank { null },
-            openingImage = screenImage,
+            openingImages = screenImages,
             onEnded = { main.post { live = null; dropFocus(); resumeAfterLive() } },
             idleMs = 30_000L
         ).also { it.start() }

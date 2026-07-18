@@ -66,17 +66,17 @@ class ScreenProjectionService : Service() {
         instance = this
     }
 
-    /** Grab the latest frame into ScreenContext. Call off the main thread. */
-    fun captureFrame(): Boolean {
-        val r = reader ?: return false
+    /** Grab the latest frame as a base64 JPEG (and into ScreenContext). Off the main thread. */
+    fun captureFrame(): String? {
+        val r = reader ?: return null
         var image = r.acquireLatestImage()
         var tries = 0
         while (image == null && tries < 8) {
-            try { Thread.sleep(70) } catch (e: InterruptedException) { return false }
+            try { Thread.sleep(70) } catch (e: InterruptedException) { return null }
             image = r.acquireLatestImage()
             tries++
         }
-        val img = image ?: return false
+        val img = image ?: return null
         return try {
             val plane = img.planes[0]
             val buffer = plane.buffer
@@ -89,12 +89,22 @@ class ScreenProjectionService : Service() {
             bmp.copyPixelsFromBuffer(buffer)
             val cropped = if (rowPadding == 0) bmp else Bitmap.createBitmap(bmp, 0, 0, w, h)
             ScreenContext.set(cropped)
-            true
+            ScreenContext.recent()
         } catch (e: Exception) {
-            false
+            null
         } finally {
             runCatching { img.close() }
         }
+    }
+
+    /** Capture several frames over time so Matrash can understand a video. */
+    fun captureFrames(count: Int, gapMs: Long): List<String> {
+        val out = ArrayList<String>()
+        for (i in 0 until count) {
+            captureFrame()?.let { if (out.lastOrNull() != it) out.add(it) }
+            if (i < count - 1) try { Thread.sleep(gapMs) } catch (e: InterruptedException) { break }
+        }
+        return out
     }
 
     private fun cleanup() {

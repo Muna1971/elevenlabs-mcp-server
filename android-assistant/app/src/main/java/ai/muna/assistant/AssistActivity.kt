@@ -90,10 +90,13 @@ class AssistActivity : AppCompatActivity() {
         if (prefs.geminiKey.isBlank()) { listen(); return }
         setState(getString(R.string.thinking))
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { awaitScreen(1500) }
+            val frames = withContext(Dispatchers.IO) {
+                val proj = ScreenProjectionService.instance
+                if (proj != null) proj.captureFrames(3, 550)
+                else { awaitScreen(1500); listOfNotNull(ScreenContext.recent()) }
+            }
             val txt = ScreenContext.recentText()
-            val img = ScreenContext.recent()
-            if (txt != null || img != null) toast("📷 أشوف الشاشة")
+            if (txt != null || frames.isNotEmpty()) toast("📷 أشوف الشاشة")
             val instruction = buildString {
                 append(prefs.systemPrompt())
                 if (!txt.isNullOrBlank()) {
@@ -109,7 +112,7 @@ class AssistActivity : AppCompatActivity() {
                 systemInstruction = instruction,
                 onStatus = { s -> runOnUiThread { setState(s) } },
                 onToolCall = { name, input -> Commands.exec(this@AssistActivity, name, input) },
-                openingImage = img,
+                openingImages = frames,
                 onEnded = { runOnUiThread { if (!isFinishing) finish() } },
                 idleMs = 30_000L
             ).also { it.start() }

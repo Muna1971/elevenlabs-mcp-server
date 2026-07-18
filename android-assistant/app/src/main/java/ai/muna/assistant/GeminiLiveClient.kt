@@ -89,6 +89,17 @@ class GeminiLiveClient(
             JSONObject().put("turns", turns).put("turnComplete", false)).toString())
     }
 
+    /** Send the screenshot AND the request together as one complete turn. */
+    fun sendImageWithText(b64Jpeg: String, text: String) {
+        val parts = JSONArray()
+            .put(JSONObject().put("inlineData", JSONObject()
+                .put("mimeType", "image/jpeg").put("data", b64Jpeg)))
+            .put(JSONObject().put("text", text))
+        val turns = JSONArray().put(JSONObject().put("role", "user").put("parts", parts))
+        ws?.send(JSONObject().put("clientContent",
+            JSONObject().put("turns", turns).put("turnComplete", true)).toString())
+    }
+
     /** Send a typed/opening request as a user turn (Gemini still replies with voice). */
     fun sendText(text: String) {
         val turns = JSONArray().put(
@@ -218,8 +229,13 @@ class GeminiLiveClient(
                 startPlayback()
                 if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
-                openingImage?.takeIf { it.isNotBlank() }?.let { sendImage(it) }
-                opening?.takeIf { it.isNotBlank() }?.let { sendText(it) }
+                val hasImg = !openingImage.isNullOrBlank()
+                val hasTxt = !opening.isNullOrBlank()
+                when {
+                    hasImg && hasTxt -> sendImageWithText(openingImage!!, opening!!)
+                    hasTxt -> sendText(opening!!)
+                    hasImg -> sendImage(openingImage!!)
+                }
             }
             json.has("serverContent") -> {
                 lastReply = System.currentTimeMillis()

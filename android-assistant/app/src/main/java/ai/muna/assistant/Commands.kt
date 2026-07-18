@@ -77,8 +77,12 @@ object Commands {
                 mapOf("target" to "رقم الهاتف أو اسم جهة الاتصال، مثل: ماما"), listOf("target")))
             .put(tool("whatsapp", "افتح محادثة واتساب مع جهة اتصال، مع رسالة جاهزة اختيارية",
                 mapOf("contact" to "اسم جهة الاتصال (اختياري)", "message" to "نص الرسالة (اختياري)"), listOf()))
-            .put(tool("set_reminder", "اضبط تذكيرًا أو منبّهًا",
-                mapOf("text" to "نص التذكير"), listOf("text")))
+            .put(tool("set_reminder", "اضبط منبّهًا/تذكيرًا في وقت محدّد (يُضبط تلقائيًا دون تدخّل)",
+                mapOf(
+                    "text" to "نص التذكير",
+                    "hour" to "الساعة بنظام 24 (مثال: 14 تعني الثانية ظهرًا، 8 تعني الثامنة صباحًا)",
+                    "minute" to "الدقيقة 0-59 (0 إن لم تُذكر)"
+                ), listOf("text")))
             .put(tool("web_search", "ابحث في الإنترنت",
                 mapOf("query" to "كلمات البحث"), listOf("query")))
             .put(JSONObject().put("name", "send_email")
@@ -107,7 +111,9 @@ object Commands {
         "navigate" -> navigate(ctx, input.optString("place"))
         "call" -> call(ctx, input.optString("target"))
         "whatsapp" -> whatsapp(ctx, input.optString("contact"), input.optString("message"))
-        "set_reminder" -> setReminder(ctx, input.optString("text"))
+        "set_reminder" -> setReminder(ctx, input.optString("text"),
+            input.optString("hour").toIntOrNull() ?: -1,
+            input.optString("minute").toIntOrNull() ?: 0)
         "web_search" -> webSearch(ctx, input.optString("query"))
         "send_email" -> sendEmail(ctx, input.optString("to"), input.optString("subject"), input.optString("body"))
         "email_document" -> emailDocument(ctx, input.optString("to"), input.optString("subject"),
@@ -244,13 +250,27 @@ object Commands {
         return if (err == null) "فتحت واتساب — اختاري جهة الاتصال ثم أرسلي." else "تعذّر فتح واتساب ($err)."
     }
 
-    private fun setReminder(ctx: Context, text: String): String {
+    private fun setReminder(ctx: Context, text: String, hour: Int, minute: Int): String {
         val label = text.ifBlank { "تذكير" }
+        val hasTime = hour in 0..23
+        val min = minute.coerceIn(0, 59)
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_MESSAGE, label)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            if (hasTime) {
+                putExtra(AlarmClock.EXTRA_HOUR, hour)
+                putExtra(AlarmClock.EXTRA_MINUTES, min)
+                // Create it silently — no manual steps, fully hands-free.
+                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+            } else {
+                putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+            }
         }
-        return launch(ctx, intent, "تذكير: «$label» — اضبطي الوقت.")
+        val err = fire(ctx, intent)
+        return when {
+            err != null -> "تعذّر ضبط التذكير ($err)."
+            hasTime -> "تم ضبط تذكير «$label» الساعة %02d:%02d ✅".format(hour, min)
+            else -> "فتحت المنبّه لتذكير «$label» — اضبطي الوقت."
+        }
     }
 
     private fun webSearch(ctx: Context, query: String): String =

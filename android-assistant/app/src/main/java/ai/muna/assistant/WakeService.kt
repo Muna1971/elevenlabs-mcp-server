@@ -200,10 +200,13 @@ class WakeService : Service() {
             val txt = ScreenContext.recentText()
             val img = ScreenContext.recent()
             main.post {
-                when {
-                    img != null || !txt.isNullOrBlank() -> toast("📄 قرأت الشاشة ✓")
-                    else -> toast("⚠️ ما قدرت أشوف الشاشة — فعّلي «تحليل النص/الصور» في إعدادات المساعد الرقمي")
+                val msg = when {
+                    img != null && !txt.isNullOrBlank() -> "✓ صورة + نص (${txt.length} حرف)"
+                    img != null -> "✓ صورة الشاشة"
+                    !txt.isNullOrBlank() -> "نص فقط ${txt.length} حرف — بدون صورة!"
+                    else -> "⚠️ ما التقطت الشاشة — فعّلي «تحليل النص/الصور»"
                 }
+                toast(msg)
                 startLiveWith(opening, txt, img)
             }
         }

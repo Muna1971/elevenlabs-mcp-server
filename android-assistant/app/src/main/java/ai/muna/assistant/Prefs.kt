@@ -69,6 +69,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_WAKE, false)
         set(v) = sp.edit().putBoolean(KEY_WAKE, v).apply()
 
+    /** Whether the user granted screen capture (screen reading on any app). */
+    var screenReadEnabled: Boolean
+        get() = sp.getBoolean(KEY_SCREEN_READ, false)
+        set(v) = sp.edit().putBoolean(KEY_SCREEN_READ, v).apply()
+
     /** Whom Muna is addressing: 0=elder woman, 1=young woman, 2=elder man, 3=young man. */
     var addressee: Int
         get() = sp.getInt(KEY_ADDRESSEE, 0)
@@ -178,6 +183,7 @@ class Prefs(context: Context) {
         private const val KEY_PERSONA = "persona2"
         private const val KEY_SPEAK = "speak"
         private const val KEY_WAKE = "wake"
+        private const val KEY_SCREEN_READ = "screen_read"
         private const val KEY_ADDRESSEE = "addressee"
         // Arabic voice chosen for مطراش (Creator-plan account).
         const val DEFAULT_VOICE = "rUaPbzcZIu8df8iNL9WZ"

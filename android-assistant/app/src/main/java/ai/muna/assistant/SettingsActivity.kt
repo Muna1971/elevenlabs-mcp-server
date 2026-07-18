@@ -49,7 +49,19 @@ class SettingsActivity : AppCompatActivity() {
         binding.etPersona.setText(prefs.persona)
         binding.swSpeak.isChecked = prefs.speakReplies
         binding.swWake.isChecked = prefs.wakeEnabled
+        binding.swScreenRead.isChecked = prefs.screenReadEnabled && ScreenProjectionService.instance != null
         binding.spAddressee.setSelection(prefs.addressee)
+
+        binding.swScreenRead.setOnCheckedChangeListener { btn, checked ->
+            if (!btn.isPressed) return@setOnCheckedChangeListener
+            if (checked) {
+                // Ask for the one-time screen-capture grant.
+                startActivity(Intent(this, ProjectionRequestActivity::class.java))
+            } else {
+                prefs.screenReadEnabled = false
+                stopService(Intent(this, ScreenProjectionService::class.java))
+            }
+        }
 
         binding.btnTestVoice.setOnClickListener { testVoice() }
 

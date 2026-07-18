@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Screen reading on ANY app (X, news…) via screen capture -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Lets the wake service open apps / place calls from the background -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
@@ -122,6 +124,19 @@
             android:name=".WakeService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- Screen capture so Matrash can read any app (tweets, posts, news…) -->
+        <service
+            android:name=".ScreenProjectionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- Transparent activity that asks for the one-time screen-capture grant -->
+        <activity
+            android:name=".ProjectionRequestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Muna.Transparent" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

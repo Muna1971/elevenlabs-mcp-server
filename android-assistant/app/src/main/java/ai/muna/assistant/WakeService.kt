@@ -191,12 +191,14 @@ class WakeService : Service() {
         main.post { recognizer?.destroy(); recognizer = null }
         stopPlayback()
         grabFocus()
-        // Silently grab the current screen (like the side-key assistant) so she
-        // can say "اقرأ الأخبار على الشاشة" hands-free.
+        // Grab the current screen so she can say "اقرأ الشاشة" hands-free.
+        // Screen capture (MediaProjection) reads ANY app — tweets, posts, news —
+        // which the assist API can't. Fall back to assist text if not granted.
         ScreenContext.clear()
-        runCatching { MunaVoiceInteractionService.instance?.captureScreen() }
+        val projection = ScreenProjectionService.instance
+        if (projection == null) runCatching { MunaVoiceInteractionService.instance?.captureScreen() }
         io.execute {
-            awaitScreen(2500)
+            if (projection != null) projection.captureFrame() else awaitScreen(2500)
             val txt = ScreenContext.recentText()
             val img = ScreenContext.recent()
             main.post {

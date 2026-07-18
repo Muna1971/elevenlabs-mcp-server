@@ -92,7 +92,8 @@ class AssistActivity : AppCompatActivity() {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { awaitScreen(1500) }
             val txt = ScreenContext.recentText()
-            if (txt != null) toast("📷 أشوف الشاشة")
+            val img = ScreenContext.recent()
+            if (txt != null || img != null) toast("📷 أشوف الشاشة")
             val instruction = buildString {
                 append(prefs.systemPrompt())
                 if (!txt.isNullOrBlank()) {
@@ -108,6 +109,7 @@ class AssistActivity : AppCompatActivity() {
                 systemInstruction = instruction,
                 onStatus = { s -> runOnUiThread { setState(s) } },
                 onToolCall = { name, input -> Commands.exec(this@AssistActivity, name, input) },
+                openingImage = img,
                 onEnded = { runOnUiThread { if (!isFinishing) finish() } },
                 idleMs = 30_000L
             ).also { it.start() }

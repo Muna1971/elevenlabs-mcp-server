@@ -196,12 +196,20 @@ class WakeService : Service() {
         ScreenContext.clear()
         runCatching { MunaVoiceInteractionService.instance?.captureScreen() }
         io.execute {
-            val screen = awaitScreenText(1400)
-            main.post { startLiveWith(opening, screen) }
+            awaitScreen(2500)
+            val txt = ScreenContext.recentText()
+            val img = ScreenContext.recent()
+            main.post {
+                when {
+                    img != null || !txt.isNullOrBlank() -> toast("📄 قرأت الشاشة ✓")
+                    else -> toast("⚠️ ما قدرت أشوف الشاشة — فعّلي «تحليل النص/الصور» في إعدادات المساعد الرقمي")
+                }
+                startLiveWith(opening, txt, img)
+            }
         }
     }
 
-    private fun startLiveWith(opening: String, screenText: String?) {
+    private fun startLiveWith(opening: String, screenText: String?, screenImage: String?) {
         val instruction = buildString {
             append(prefs.systemPrompt())
             if (!screenText.isNullOrBlank()) {
@@ -222,19 +230,19 @@ class WakeService : Service() {
                 r
             },
             opening = opening.ifBlank { null },
+            openingImage = screenImage,
             onEnded = { main.post { live = null; dropFocus(); resumeAfterLive() } },
             idleMs = 30_000L
         ).also { it.start() }
     }
 
-    /** Wait briefly for the silent screen capture to arrive. */
-    private fun awaitScreenText(timeoutMs: Long): String? {
+    /** Wait briefly for the silent screen capture (text and/or screenshot). */
+    private fun awaitScreen(timeoutMs: Long) {
         val start = System.currentTimeMillis()
         while (System.currentTimeMillis() - start < timeoutMs) {
-            ScreenContext.recentText()?.let { return it }
-            try { Thread.sleep(120) } catch (e: InterruptedException) { return null }
+            if (ScreenContext.recentText() != null || ScreenContext.recent() != null) return
+            try { Thread.sleep(120) } catch (e: InterruptedException) { return }
         }
-        return ScreenContext.recentText()
     }
 
     private fun resumeAfterLive() {

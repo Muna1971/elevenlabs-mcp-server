@@ -35,6 +35,8 @@ class GeminiLiveClient(
     private val onToolCall: (name: String, args: JSONObject) -> String,
     // Optional first request (e.g. what she said right after the wake word).
     private val opening: String? = null,
+    // Optional screenshot (base64 JPEG) so Matrash can "see" the screen.
+    private val openingImage: String? = null,
     // Called once when the session ends (idle, closed, or failed). Used by the
     // hands-free wake service to resume listening for the next "مطراش".
     private val onEnded: (() -> Unit)? = null,
@@ -73,6 +75,18 @@ class GeminiLiveClient(
             .addHeader("x-goog-api-key", apiKey)   // supports newer AQ.* keys
             .build()
         ws = http.newWebSocket(req, listener)
+    }
+
+    /** Give Gemini the current screenshot as context (doesn't force a reply). */
+    fun sendImage(b64Jpeg: String) {
+        val parts = JSONArray()
+            .put(JSONObject().put("inlineData", JSONObject()
+                .put("mimeType", "image/jpeg").put("data", b64Jpeg)))
+            .put(JSONObject().put("text",
+                "هذي لقطة من شاشة المستخدمة الآن. اقرأها واستعملها للإجابة عن سؤالها."))
+        val turns = JSONArray().put(JSONObject().put("role", "user").put("parts", parts))
+        ws?.send(JSONObject().put("clientContent",
+            JSONObject().put("turns", turns).put("turnComplete", false)).toString())
     }
 
     /** Send a typed/opening request as a user turn (Gemini still replies with voice). */
@@ -204,6 +218,7 @@ class GeminiLiveClient(
                 startPlayback()
                 if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
+                openingImage?.takeIf { it.isNotBlank() }?.let { sendImage(it) }
                 opening?.takeIf { it.isNotBlank() }?.let { sendText(it) }
             }
             json.has("serverContent") -> {

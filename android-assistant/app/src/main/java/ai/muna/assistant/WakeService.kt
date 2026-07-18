@@ -193,6 +193,7 @@ class WakeService : Service() {
         grabFocus()
         live?.stop()
         live = GeminiLiveClient(
+            context = this,
             apiKey = prefs.geminiKey,
             systemInstruction = prefs.systemPrompt(),
             onStatus = { s -> toast(s) },

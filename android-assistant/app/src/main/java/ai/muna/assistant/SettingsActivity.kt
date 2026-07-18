@@ -124,6 +124,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.voiceResult.text = "جارٍ الاتصال بـ Gemini…"
         testClient?.stop()
         testClient = GeminiLiveClient(
+            context = this,
             apiKey = prefs.geminiKey,
             // Light prompt so the test is fast and isolates the voice path.
             systemInstruction = "أنت «مطراش»، مساعد صوتي إماراتي بلهجة أهل العين. تكلّم بالعربية بإيجاز.",

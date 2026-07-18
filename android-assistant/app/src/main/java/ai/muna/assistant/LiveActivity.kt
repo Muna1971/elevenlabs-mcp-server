@@ -49,6 +49,7 @@ class LiveActivity : AppCompatActivity() {
 
     private fun connect() {
         client = GeminiLiveClient(
+            context = this,
             apiKey = prefs.geminiKey,
             systemInstruction = prefs.systemPrompt(),
             onStatus = { s -> runOnUiThread { binding.status.text = s } },

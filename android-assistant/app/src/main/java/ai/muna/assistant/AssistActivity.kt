@@ -103,6 +103,7 @@ class AssistActivity : AppCompatActivity() {
             }
             live?.stop()
             live = GeminiLiveClient(
+                context = this@AssistActivity,
                 apiKey = prefs.geminiKey,
                 systemInstruction = instruction,
                 onStatus = { s -> runOnUiThread { setState(s) } },

@@ -1,6 +1,8 @@
 package ai.muna.assistant
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -8,6 +10,7 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.util.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -25,6 +28,7 @@ import java.util.concurrent.TimeUnit
  * while still letting Matrash control the phone via function calls.
  */
 class GeminiLiveClient(
+    private val context: Context,
     private val apiKey: String,
     private val systemInstruction: String,
     private val onStatus: (String) -> Unit,
@@ -48,6 +52,11 @@ class GeminiLiveClient(
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
+
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var savedMode = AudioManager.MODE_NORMAL
+    private var savedSpeaker = false
+    private var routed = false
 
     private var ws: WebSocket? = null
     private var record: AudioRecord? = null
@@ -85,6 +94,51 @@ class GeminiLiveClient(
         runCatching { track?.stop(); track?.release() }
         track = null
         playQueue.clear()
+        restoreAudioRoute()
+    }
+
+    /**
+     * Force Matrash's voice onto the LOUDSPEAKER (or car Bluetooth) instead of
+     * the earpiece. Using a VOICE_COMMUNICATION mic puts the device in call
+     * routing, which otherwise sends the reply to the ear speaker — sounding
+     * like "no sound" on a phone held normally.
+     */
+    private fun setupAudioRoute() {
+        if (routed) return
+        routed = true
+        runCatching {
+            savedMode = audioManager.mode
+            @Suppress("DEPRECATION")
+            savedSpeaker = audioManager.isSpeakerphoneOn
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val devices = audioManager.availableCommunicationDevices
+                // Prefer a connected headset/car (Bluetooth/wired); else speaker.
+                val preferred = devices.firstOrNull {
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES
+                } ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                preferred?.let { audioManager.setCommunicationDevice(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = true
+            }
+        }
+    }
+
+    private fun restoreAudioRoute() {
+        if (!routed) return
+        routed = false
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice()
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = savedSpeaker
+            }
+            audioManager.mode = savedMode
+        }
     }
 
     private val listener = object : WebSocketListener() {
@@ -146,6 +200,7 @@ class GeminiLiveClient(
                 running = true
                 lastReply = System.currentTimeMillis()
                 onStatus("أستمع إليك…")
+                setupAudioRoute()
                 startPlayback()
                 if (captureMic) startCapture()
                 if (idleMs > 0) startIdleWatch()
@@ -256,7 +311,7 @@ class GeminiLiveClient(
         )
         val t = AudioTrack(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
             AudioFormat.Builder().setSampleRate(24000)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)

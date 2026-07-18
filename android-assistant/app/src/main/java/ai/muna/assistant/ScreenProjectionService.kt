@@ -19,15 +19,14 @@ import android.os.IBinder
 import android.os.Looper
 
 /**
- * Keeps a live screen-capture (MediaProjection) so Matrash can "see" ANY app —
- * tweets, posts, news inside WebViews — which the assist API can't read.
- * A single frame is grabbed on demand into [ScreenContext] as a JPEG.
+ * Holds a screen-capture grant so Matrash can read ANY app — photos, videos,
+ * social media — which the assist API can't. The screen is captured ONLY in a
+ * brief on-demand burst (VirtualDisplay is created then released each time), so
+ * there is no continuous mirroring, no battery drain, and no audio conflict.
  */
 class ScreenProjectionService : Service() {
 
     private var projection: MediaProjection? = null
-    private var reader: ImageReader? = null
-    private var display: VirtualDisplay? = null
     private var w = 0
     private var h = 0
     private var dpi = 0
@@ -57,23 +56,43 @@ class ScreenProjectionService : Service() {
         projection?.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() { cleanup() }
         }, Handler(Looper.getMainLooper()))
-        reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
-        display = projection?.createVirtualDisplay(
-            "matrash-screen", w, h, dpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader!!.surface, null, null
-        )
         instance = this
     }
 
-    /** Grab the latest frame as a base64 JPEG (and into ScreenContext). Off the main thread. */
-    fun captureFrame(): String? {
-        val r = reader ?: return null
-        var image = r.acquireLatestImage()
+    /**
+     * Capture a short burst of frames (so a moving video is understood), then
+     * release the virtual display right away. Call OFF the main thread.
+     */
+    fun captureFrames(count: Int, gapMs: Long): List<String> {
+        val proj = projection ?: return emptyList()
+        val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 3)
+        val display: VirtualDisplay? = runCatching {
+            proj.createVirtualDisplay(
+                "matrash-shot", w, h, dpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                reader.surface, null, null
+            )
+        }.getOrNull()
+        if (display == null) { runCatching { reader.close() }; return emptyList() }
+        return try {
+            val out = ArrayList<String>()
+            for (i in 0 until count) {
+                grabOne(reader)?.let { if (out.lastOrNull() != it) out.add(it) }
+                if (i < count - 1) try { Thread.sleep(gapMs) } catch (e: InterruptedException) { break }
+            }
+            out
+        } finally {
+            runCatching { display.release() }
+            runCatching { reader.close() }
+        }
+    }
+
+    private fun grabOne(reader: ImageReader): String? {
+        var image = reader.acquireLatestImage()
         var tries = 0
-        while (image == null && tries < 8) {
-            try { Thread.sleep(70) } catch (e: InterruptedException) { return null }
-            image = r.acquireLatestImage()
+        while (image == null && tries < 12) {
+            try { Thread.sleep(60) } catch (e: InterruptedException) { return null }
+            image = reader.acquireLatestImage()
             tries++
         }
         val img = image ?: return null
@@ -97,19 +116,7 @@ class ScreenProjectionService : Service() {
         }
     }
 
-    /** Capture several frames over time so Matrash can understand a video. */
-    fun captureFrames(count: Int, gapMs: Long): List<String> {
-        val out = ArrayList<String>()
-        for (i in 0 until count) {
-            captureFrame()?.let { if (out.lastOrNull() != it) out.add(it) }
-            if (i < count - 1) try { Thread.sleep(gapMs) } catch (e: InterruptedException) { break }
-        }
-        return out
-    }
-
     private fun cleanup() {
-        runCatching { display?.release() }; display = null
-        runCatching { reader?.close() }; reader = null
         runCatching { projection?.stop() }; projection = null
         if (instance === this) instance = null
     }
@@ -124,12 +131,12 @@ class ScreenProjectionService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             nm.createNotificationChannel(
-                NotificationChannel(channelId, "قراءة الشاشة", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(channelId, "قراءة الشاشة", NotificationManager.IMPORTANCE_MIN)
             )
         }
         val notif: Notification = Notification.Builder(this, channelId)
-            .setContentTitle("مطراش يقدر يقرأ شاشتك")
-            .setContentText("عند الطلب فقط — لا يسجّل")
+            .setContentTitle("مطراش يقدر يقرأ شاشتك عند الطلب")
+            .setContentText("لا يلتقط إلا لحظة ما تطلبين — لا يسجّل")
             .setSmallIcon(R.drawable.ic_mic_dark)
             .setOngoing(true)
             .build()

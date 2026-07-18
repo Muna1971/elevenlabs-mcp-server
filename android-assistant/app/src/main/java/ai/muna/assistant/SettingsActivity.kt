@@ -49,13 +49,17 @@ class SettingsActivity : AppCompatActivity() {
         binding.etPersona.setText(prefs.persona)
         binding.swSpeak.isChecked = prefs.speakReplies
         binding.swWake.isChecked = prefs.wakeEnabled
+        binding.swScreenRead.isChecked = prefs.screenReadEnabled && ScreenProjectionService.instance != null
         binding.spAddressee.setSelection(prefs.addressee)
 
-        // Screen reading is on-demand via the assist API now — make sure any old
-        // continuous screen-capture (battery drain) is stopped.
-        if (prefs.screenReadEnabled) {
-            prefs.screenReadEnabled = false
-            runCatching { stopService(Intent(this, ScreenProjectionService::class.java)) }
+        binding.swScreenRead.setOnCheckedChangeListener { btn, checked ->
+            if (!btn.isPressed) return@setOnCheckedChangeListener
+            if (checked) {
+                startActivity(Intent(this, ProjectionRequestActivity::class.java))
+            } else {
+                prefs.screenReadEnabled = false
+                runCatching { stopService(Intent(this, ScreenProjectionService::class.java)) }
+            }
         }
 
         binding.btnTestVoice.setOnClickListener { testVoice() }

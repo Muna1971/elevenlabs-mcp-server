@@ -150,6 +150,21 @@
             android:textColor="@color/text_muted"
             android:textSize="12sp" />
 
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/swScreenRead"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="قراءة الشاشة (صور، فيديو، تواصل اجتماعي)" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="يلتقط الشاشة لحظة طلبك فقط — لا تصوير مستمر ولا استنزاف بطارية. إذن مرّة واحدة، أعيدي تفعيله بعد إعادة التشغيل."
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
 
         <TextView
             android:layout_width="wrap_content"

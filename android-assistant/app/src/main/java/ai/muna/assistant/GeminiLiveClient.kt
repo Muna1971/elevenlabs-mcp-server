@@ -52,6 +52,7 @@ class GeminiLiveClient(
     private var track: AudioTrack? = null
     @Volatile private var running = false
     @Volatile private var ended = false
+    @Volatile private var speaking = false
     @Volatile private var lastReply = 0L
     private val playQueue = LinkedBlockingQueue<ByteArray>()
 
@@ -86,6 +87,7 @@ class GeminiLiveClient(
 
     private val listener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            onStatus("متّصل — يجهّز…")
             webSocket.send(setupMessage().toString())
         }
 
@@ -156,10 +158,12 @@ class GeminiLiveClient(
                         val inline = parts.getJSONObject(i).optJSONObject("inlineData")
                         val data = inline?.optString("data")
                         if (!data.isNullOrEmpty()) {
+                            if (!speaking) { speaking = true; onStatus("🔊 يتكلّم مطراش…") }
                             playQueue.offer(Base64.decode(data, Base64.DEFAULT))
                         }
                     }
                 }
+                if (sc.optBoolean("turnComplete")) speaking = false
             }
             json.has("toolCall") -> {
                 lastReply = System.currentTimeMillis()
@@ -239,14 +243,15 @@ class GeminiLiveClient(
         )
         val t = AudioTrack(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
             AudioFormat.Builder().setSampleRate(24000)
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                 .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build(),
-            maxOf(minBuf, 8192), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE
+            maxOf(minBuf * 4, 32768), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE
         )
         track = t
+        runCatching { t.setVolume(AudioTrack.getMaxVolume()) }
         t.play()
         Thread {
             while (running) {

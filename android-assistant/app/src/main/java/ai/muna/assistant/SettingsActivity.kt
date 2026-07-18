@@ -24,6 +24,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private var player: MediaPlayer? = null
     private var testClient: GeminiLiveClient? = null
+    private var heardTestAudio = false
 
     private val wakePermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -119,23 +120,28 @@ class SettingsActivity : AppCompatActivity() {
 
     /** Hear Matrash's real (Gemini) voice — no microphone needed. */
     private fun testGeminiVoice() {
-        binding.voiceResult.text = "جارٍ اختبار صوت مطراش (Gemini)…"
+        heardTestAudio = false
+        binding.voiceResult.text = "جارٍ الاتصال بـ Gemini…"
         testClient?.stop()
         testClient = GeminiLiveClient(
             apiKey = prefs.geminiKey,
-            systemInstruction = prefs.systemPrompt(),
-            onStatus = { s ->
-                val msg = when {
-                    s.contains("أستمع") -> "🔊 يتكلّم مطراش الآن…"
-                    s.contains("انتهت") -> "✅ نجح — سمعتِ صوت مطراش؟"
+            // Light prompt so the test is fast and isolates the voice path.
+            systemInstruction = "أنت «مطراش»، مساعد صوتي إماراتي بلهجة أهل العين. تكلّم بالعربية بإيجاز.",
+            onStatus = { s -> runOnUiThread {
+                binding.voiceResult.text = when {
+                    s.contains("يتكلّم") -> { heardTestAudio = true; "🔊 يتكلّم مطراش الآن — ارفعي صوت الوسائط لو ما تسمعين" }
+                    s.contains("انتهت") -> if (heardTestAudio)
+                        "✅ نجح — إذا ما سمعتِ صوت، ارفعي صوت «الوسائط»"
+                    else
+                        "❌ اتصل لكن ما وصل صوت — تأكدي من الإنترنت"
+                    s.contains("تعذّر") || s.contains("انقطع") -> "❌ $s"
                     else -> s
                 }
-                runOnUiThread { binding.voiceResult.text = msg }
-            },
+            } },
             onToolCall = { _, _ -> "" },
-            opening = "اختبار سريع: رحّب بإيجاز في جملة واحدة وقل إنك مطراش مساعدها الصوتي.",
+            opening = "رحّب بإيجاز في جملة واحدة وقل إنك مطراش مساعدها الصوتي.",
             onEnded = { runOnUiThread { testClient = null } },
-            idleMs = 6000L,
+            idleMs = 15000L,
             captureMic = false
         ).also { it.start() }
     }

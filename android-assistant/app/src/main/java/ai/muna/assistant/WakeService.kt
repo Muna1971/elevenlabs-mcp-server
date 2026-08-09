@@ -10,7 +10,6 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.AudioRecordingConfiguration
 import android.media.MediaPlayer
 import android.media.ToneGenerator
 import android.os.Build
@@ -48,8 +47,6 @@ class WakeService : Service() {
     private var awaitingCommand = false
     private var awaitingRetries = 0
     private var working = false
-    @Volatile private var weAreListening = false
-    @Volatile private var micBusy = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -60,8 +57,6 @@ class WakeService : Service() {
         eleven = ElevenLabsClient(prefs, cacheDir)
         androidTts = AndroidTts(this)
         startAsForeground()
-        // Yield the mic when another app (WhatsApp voice note, calls…) records.
-        runCatching { audio.registerAudioRecordingCallback(recordingCallback, main) }
         // Non-robotic "ready" cue (two soft beeps) — no synthetic voice.
         beep()
         main.postDelayed({ beep() }, 350)
@@ -111,9 +106,9 @@ class WakeService : Service() {
     // ---- Listening loop ----
 
     private fun startListening() {
-        if (working || micBusy) return
+        if (working) return
         main.post {
-            if (working || micBusy) return@post
+            if (working) return@post
             if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
             recognizer?.destroy()
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
@@ -126,33 +121,12 @@ class WakeService : Service() {
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L)
             }
-            weAreListening = true
             runCatching { recognizer?.startListening(intent) }
         }
     }
 
     private fun restartSoon(delay: Long = 600) {
-        if (!working && !micBusy) main.postDelayed({ startListening() }, delay)
-    }
-
-    /** Release the mic while another app records; resume when it's done. */
-    private val recordingCallback = object : AudioManager.AudioRecordingCallback() {
-        override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>?) {
-            if (working) return   // our own Gemini session owns the mic — ignore
-            val external = !configs.isNullOrEmpty() && !weAreListening
-            if (external && !micBusy) {
-                micBusy = true
-                main.post {
-                    weAreListening = false
-                    runCatching { recognizer?.cancel() }
-                    runCatching { recognizer?.destroy() }
-                    recognizer = null
-                }
-            } else if (!external && micBusy) {
-                micBusy = false
-                restartSoon(700)
-            }
-        }
+        if (!working) main.postDelayed({ startListening() }, delay)
     }
 
     private val listener = object : RecognitionListener {
@@ -160,15 +134,15 @@ class WakeService : Service() {
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { weAreListening = false }
+        override fun onEndOfSpeech() {}
         override fun onError(error: Int) {
-            weAreListening = false
-            // While waiting for her command, retry a few times before giving up.
+            // Another app may hold the mic (WhatsApp voice note, call) — back off
+            // a bit so we don't fight it, then resume.
             if (awaitingCommand) { awaitRetry(); return }
-            restartSoon()
+            restartSoon(if (error == SpeechRecognizer.ERROR_CLIENT ||
+                    error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500 else 600)
         }
         override fun onResults(results: Bundle?) {
-            weAreListening = false
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim().orEmpty()
             handleUtterance(text)
@@ -231,6 +205,8 @@ class WakeService : Service() {
             onToolCall = { name, input ->
                 val r = Commands.exec(this, name, input)
                 toast("🔧 $name → $r")
+                // A phone call needs the mic — end our session so telephony takes over.
+                if (name == "call") main.post { live?.stop() }
                 r
             },
             onEnded = { main.post { live = null; dropFocus(); resumeAfterLive() } },
@@ -397,7 +373,6 @@ class WakeService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        runCatching { audio.unregisterAudioRecordingCallback(recordingCallback) }
         live?.stop(); live = null
         stopPlayback()
         recognizer?.destroy()

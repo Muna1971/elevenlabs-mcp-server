@@ -109,6 +109,13 @@ class WakeService : Service() {
         if (working) return
         main.post {
             if (working) return@post
+            // Don't interrupt what she's watching/listening to: the recognizer
+            // grabs audio focus and pauses media. While media plays, stay quiet
+            // and re-check shortly — resume the moment it stops.
+            if (audio.isMusicActive) {
+                main.postDelayed({ startListening() }, 2500)
+                return@post
+            }
             if (!SpeechRecognizer.isRecognitionAvailable(this)) return@post
             recognizer?.destroy()
             recognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {

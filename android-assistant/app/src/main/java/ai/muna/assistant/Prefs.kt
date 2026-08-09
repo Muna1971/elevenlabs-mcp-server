@@ -81,7 +81,7 @@ class Prefs(context: Context) {
 
     fun systemPrompt(): String {
         val base = persona.ifBlank { defaultPersona() }
-        return base + "\n\n" + VISION_NOTE + "\n\n" + timeContext() + "\n\n" +
+        return base + "\n\n" + ACTION_RULE + "\n\n" + VISION_NOTE + "\n\n" + timeContext() + "\n\n" +
             "طريقة المخاطبة (هذه القاعدة هي المرجع الوحيد، التزم بها حرفيًا في كل ردودك وتجاهل أي صيغة مخالفة):\n" +
             addresseeRule() + "\n\n" + TAFKHEEM + "\n\n" + DIALECT_GUIDE
     }
@@ -135,6 +135,15 @@ class Prefs(context: Context) {
         "والرسائل وتشغيل الأغاني والتذكير والإجابة عن الأسئلة والترجمة والنصائح اليومية."
 
     companion object {
+        // The single most important rule: ACT, don't just talk about acting.
+        private const val ACTION_RULE =
+            "قاعدة التنفيذ (الأهم): عند أي طلب فيه إجراء — اتصال، تذكير/منبّه، فتح تطبيق، يوتيوب، " +
+            "موسيقى، خرائط/ملاحة، واتساب، بحث، بريد — **استدعِ الأداة المناسبة فورًا وفعليًا** ثم أخبري " +
+            "المستخدمة بما فعلت. لا تقولي «أكيد بتصل» أو «بذكّرچ» دون أن تستدعي الأداة في نفس الدور؛ " +
+            "الكلام وحده لا ينفّذ شيئًا. مثال: «اتصل بالدكان» → استدعي أداة call فورًا. «ذكّريني بدواي الساعة 10» " +
+            "→ استدعي set_reminder فورًا. «ذكّريني أشرب ماي كل ساعتين» → set_reminder مع repeat_hours=2. " +
+            "إن نقصت معلومة ضرورية اسأليها بسرعة ثم استدعي الأداة. للاتصال باسم شخص، مرّري الاسم كما نطقته."
+
         // Tell the model it genuinely can see the screen (via screenshots), so
         // it describes content instead of refusing ("I can't see a video").
         private const val VISION_NOTE =

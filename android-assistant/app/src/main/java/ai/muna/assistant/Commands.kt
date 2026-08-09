@@ -77,11 +77,14 @@ object Commands {
                 mapOf("target" to "رقم الهاتف أو اسم جهة الاتصال، مثل: ماما"), listOf("target")))
             .put(tool("whatsapp", "افتح محادثة واتساب مع جهة اتصال، مع رسالة جاهزة اختيارية",
                 mapOf("contact" to "اسم جهة الاتصال (اختياري)", "message" to "نص الرسالة (اختياري)"), listOf()))
-            .put(tool("set_reminder", "اضبط منبّهًا/تذكيرًا في وقت محدّد (يُضبط تلقائيًا دون تدخّل)",
+            .put(tool("set_reminder",
+                "اضبط تذكيرًا يُنطق بصوت عالٍ في وقته (مواعيد، دواء، شرب ماء…). يعمل تلقائيًا ويكرّر نفسه إن طُلب.",
                 mapOf(
-                    "text" to "نص التذكير",
-                    "hour" to "الساعة بنظام 24 (مثال: 14 تعني الثانية ظهرًا، 8 تعني الثامنة صباحًا)",
-                    "minute" to "الدقيقة 0-59 (0 إن لم تُذكر)"
+                    "text" to "نص التذكير كاملًا بالتفاصيل كما تقوله للمستخدمة (مثال: «موعدچ في مستشفى عود التوبة الساعة 10»، «خذي دوا الضغط»، «اشربي ماي»)",
+                    "day_offset" to "بعد كم يوم: 0 اليوم، 1 باچر (غدًا)، 2 بعد باچر… (0 إن لم يُذكر)",
+                    "hour" to "الساعة بنظام 24 (مثال: 22 تعني 10 مساءً، 10 تعني 10 صباحًا). اتركها فارغة للتذكير المتكرر بدون وقت محدّد",
+                    "minute" to "الدقيقة 0-59 (0 إن لم تُذكر)",
+                    "repeat_hours" to "للتكرار كل كم ساعة (مثال: 2 يعني كل ساعتين لشرب الماء). 0 أو فارغ = مرّة واحدة"
                 ), listOf("text")))
             .put(tool("web_search", "ابحث في الإنترنت",
                 mapOf("query" to "كلمات البحث"), listOf("query")))
@@ -111,9 +114,12 @@ object Commands {
         "navigate" -> navigate(ctx, input.optString("place"))
         "call" -> call(ctx, input.optString("target"))
         "whatsapp" -> whatsapp(ctx, input.optString("contact"), input.optString("message"))
-        "set_reminder" -> setReminder(ctx, input.optString("text"),
+        "set_reminder" -> Reminders.add(ctx,
+            input.optString("text").ifBlank { "تذكير" },
+            input.optString("day_offset").toIntOrNull() ?: 0,
             input.optString("hour").toIntOrNull() ?: -1,
-            input.optString("minute").toIntOrNull() ?: 0)
+            input.optString("minute").toIntOrNull() ?: 0,
+            input.optString("repeat_hours").toIntOrNull() ?: 0)
         "web_search" -> webSearch(ctx, input.optString("query"))
         "send_email" -> sendEmail(ctx, input.optString("to"), input.optString("subject"), input.optString("body"))
         "email_document" -> emailDocument(ctx, input.optString("to"), input.optString("subject"),

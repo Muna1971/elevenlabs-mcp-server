@@ -7,9 +7,17 @@ screen reading, wake-word, and accessibility focus (elderly / visually-impaired)
 ## Build & sign (this environment)
 - No Gradle wrapper download (proxy 403). Use system gradle: `gradle :app:assembleDebug`
   with `ANDROID_HOME=/opt/android-sdk`, `local.properties` → `sdk.dir=/opt/android-sdk`.
-- Sign with `apksigner` + a fixed debug keystore (`/tmp/debug.keystore`, pass `android`),
-  then `zipalign`. **Always reuse the SAME keystore** (SHA-256 `e1ff92c…`) so the user
-  installs over the top without uninstalling. A new keystore forces an uninstall.
+- Sign with `apksigner` + the committed keystore `android-assistant/keystore/debug.keystore`
+  (pass `android`, alias `androiddebugkey`), then `zipalign`. It lives in the repo so the
+  signature is STABLE across container resets (SHA-256 `4d289e8d…`) — always use it so the
+  user installs over the top without uninstalling. Do NOT generate a new keystore (that
+  changes the signature and forces a one-time uninstall).
+- If the container was reset, the Android SDK is gone. Re-provision: download
+  `commandlinetools-linux-<ver>_latest.zip` (note: NO hyphen in "commandlinetools"; get the
+  current `<ver>` from `https://dl.google.com/android/repository/repository2-3.xml`) into
+  `/opt/android-sdk/cmdline-tools/latest/`, then `sdkmanager --licenses` and
+  `sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"`. Recreate
+  `android-assistant/local.properties` → `sdk.dir=/opt/android-sdk`.
 - `cd` into `android-assistant/` before gradle — the shell cwd resets to repo root between
   Bash calls, which makes gradle fail with "does not contain a Gradle build".
 - Before committing, scan the staged diff for secrets (Anthropic `sk-ant-…`, ElevenLabs

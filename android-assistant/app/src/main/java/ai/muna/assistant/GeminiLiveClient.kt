@@ -62,6 +62,7 @@ class GeminiLiveClient(
     @Volatile private var running = false
     @Volatile private var ended = false
     @Volatile private var speaking = false
+    @Volatile private var lastAudioAt = 0L
     @Volatile private var lastReply = 0L
     private val playQueue = LinkedBlockingQueue<ByteArray>()
     private val firstTurnLock = Any()
@@ -216,6 +217,7 @@ class GeminiLiveClient(
                         val data = inline?.optString("data")
                         if (!data.isNullOrEmpty()) {
                             if (!speaking) { speaking = true; onStatus("🔊 يتكلّم مطراش…") }
+                            lastAudioAt = System.currentTimeMillis()
                             playQueue.offer(Base64.decode(data, Base64.DEFAULT))
                         }
                     }
@@ -295,7 +297,13 @@ class GeminiLiveClient(
             runCatching { rec.startRecording() }
             while (running) {
                 val n = rec.read(buf, 0, buf.size)
-                if (n > 0) {
+                // Half-duplex: keep draining the mic buffer, but DON'T send while
+                // Matrash is speaking (or just finished) — otherwise the speaker's
+                // own voice echoes into the mic and Gemini interrupts itself
+                // (worse the louder the volume).
+                val quiet = !speaking && playQueue.isEmpty() &&
+                    System.currentTimeMillis() - lastAudioAt > 350
+                if (n > 0 && quiet) {
                     val chunk = if (n == buf.size) buf else buf.copyOf(n)
                     val b64 = Base64.encodeToString(chunk, Base64.NO_WRAP)
                     val msg = JSONObject().put("realtimeInput", JSONObject().put("mediaChunks",

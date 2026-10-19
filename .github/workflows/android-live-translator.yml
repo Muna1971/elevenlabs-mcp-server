@@ -1,0 +1,59 @@
+name: Build Android live Arabic subtitles app
+
+on:
+  push:
+    paths:
+      - 'android-live-translator/**'
+      - '.github/workflows/android-live-translator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-live-translator
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check offline speech model links
+        run: |
+          for m in $(grep -o 'vosk-model-small-[a-z0-9.-]*' app/src/main/java/com/muna/livetranslate/SourceLanguage.kt); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "https://alphacephei.com/vosk/models/$m.zip")
+            echo "$m -> $code"
+            [ "$code" = "200" ] || exit 1
+          done
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Build APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk LiveArabicSubtitles.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiveArabicSubtitles-apk
+          path: android-live-translator/LiveArabicSubtitles.apk
+
+      - name: Publish APK as a downloadable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: live-subtitles-apk
+          name: تطبيق الترجمة الفورية (APK)
+          prerelease: true
+          files: android-live-translator/LiveArabicSubtitles.apk
+          body: |
+            حمّل ملف LiveArabicSubtitles.apk من الأسفل على هاتفك وثبّته.
+            Download LiveArabicSubtitles.apk below on your Android phone and install it.

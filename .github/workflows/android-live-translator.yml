@@ -36,7 +36,7 @@ jobs:
           gradle-version: '8.14.3'
 
       - name: Build APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk LiveArabicSubtitles.apk

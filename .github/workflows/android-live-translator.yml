@@ -25,6 +25,7 @@ jobs:
           enar=$(python3 -c "import json;print(json.load(open('app/src/main/assets/bergamot_models.json'))['pairs']['en-ar']['model'])")
           for url in \
             https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin \
             https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin \
             "$base/$enar"; do
             code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$url")

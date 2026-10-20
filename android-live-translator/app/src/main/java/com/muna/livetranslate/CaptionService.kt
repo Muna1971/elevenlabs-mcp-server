@@ -19,6 +19,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -54,9 +55,15 @@ class CaptionService : Service() {
     private var speechThread: Thread? = null
     @Volatile private var listening = false
 
-    /** Spoken phrases waiting for recognition (16 kHz mono floats). */
-    private val phrases = LinkedBlockingDeque<FloatArray>()
-    private val recognised = Channel<WhisperEngine.Result>(Channel.UNLIMITED)
+    /** A spoken phrase (16 kHz mono floats) and the "scene" (video) it belongs to. */
+    private class Phrase(val audio: FloatArray, val scene: Int, val endedAt: Long)
+    private class Caption(val language: String, val text: String, val scene: Int, val endedAt: Long)
+
+    private val phrases = LinkedBlockingDeque<Phrase>()
+    private val recognised = Channel<Caption>(Channel.UNLIMITED)
+
+    /** Bumped when a new video seems to start, so nothing from the previous one is shown. */
+    @Volatile private var scene = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -209,6 +216,9 @@ class CaptionService : Service() {
         var speaking = false
         var silentChunks = 0
         var speechChunks = 0
+        var quietChunks = 0      // consecutive chunks with no sound at all
+        var noSpeechChunks = 0   // consecutive chunks without speech
+        var sceneCleared = true
 
         fun flush() {
             if (speechChunks >= MIN_SPEECH_CHUNKS) {
@@ -220,7 +230,7 @@ class CaptionService : Service() {
                 }
                 // Keep latency low: if recognition falls behind, drop the oldest phrase.
                 while (phrases.size >= MAX_QUEUED_PHRASES) phrases.pollFirst()
-                phrases.offerLast(out)
+                phrases.offerLast(Phrase(out, scene, SystemClock.elapsedRealtime()))
             }
             phrase.clear()
             phraseSamples = 0
@@ -239,6 +249,18 @@ class CaptionService : Service() {
             for (v in samples) if (abs(v) > peak) peak = abs(v)
             // Nothing playing (digital silence): skip the neural voice detector to save battery.
             val loud = peak > SILENCE_PEAK && vad.speechProbability(samples) > SPEECH_PROBABILITY
+
+            quietChunks = if (peak <= SILENCE_PEAK) quietChunks + 1 else 0
+            noSpeechChunks = if (loud) 0 else noSpeechChunks + 1
+            if (loud) sceneCleared = false
+            // A moment of total silence (switching videos) or a long stretch without speech:
+            // treat what follows as a new video.
+            if (!sceneCleared && !speaking &&
+                (quietChunks >= SCENE_SILENCE_CHUNKS || noSpeechChunks >= SCENE_NO_SPEECH_CHUNKS)
+            ) {
+                sceneCleared = true
+                startNewScene(vad)
+            }
 
             if (!speaking) {
                 preRoll.addLast(samples)
@@ -272,6 +294,13 @@ class CaptionService : Service() {
         }
     }
 
+    private fun startNewScene(vad: VoiceDetector) {
+        scene++
+        phrases.clear()
+        vad.reset()
+        mainHandler.post { overlay?.clear() }
+    }
+
     /**
      * Language detection costs a second full encoder pass per phrase, so once the same
      * language was detected twice in a row it is locked in and only re-checked now and then.
@@ -281,8 +310,17 @@ class CaptionService : Service() {
         var lastDetected = ""
         var streak = 0
         var sinceCheck = 0
+        var currentScene = scene
         while (listening) {
-            val audio = phrases.pollFirst(200, TimeUnit.MILLISECONDS) ?: continue
+            val phrase = phrases.pollFirst(200, TimeUnit.MILLISECONDS) ?: continue
+            if (phrase.scene != scene || isStale(phrase.endedAt)) continue
+            if (phrase.scene != currentScene) {
+                // New video: its language may differ, detect it again.
+                currentScene = phrase.scene
+                locked = null
+                streak = 0
+            }
+            val audio = phrase.audio
             val request = when {
                 lang != SourceLanguage.AUTO -> lang.code
                 locked != null && sinceCheck < RECHECK_LANGUAGE_EVERY -> locked
@@ -299,7 +337,7 @@ class CaptionService : Service() {
                 sinceCheck++
             }
             val text = cleanUp(result.text) ?: continue
-            recognised.trySend(WhisperEngine.Result(detected, text))
+            recognised.trySend(Caption(detected, text, phrase.scene, phrase.endedAt))
         }
     }
 
@@ -314,12 +352,17 @@ class CaptionService : Service() {
 
     private fun startTranslationPipeline() {
         scope.launch {
-            for (r in recognised) {
-                val arabic = translator?.translate(r.text, r.language) ?: r.text
+            for (c in recognised) {
+                if (c.scene != scene || isStale(c.endedAt)) continue
+                val arabic = translator?.translate(c.text, c.language) ?: c.text
+                if (c.scene != scene || isStale(c.endedAt)) continue
                 withContext(Dispatchers.Main) { overlay?.showFinal(arabic) }
             }
         }
     }
+
+    /** Subtitles arriving this long after the words were spoken are out of sync: drop them. */
+    private fun isStale(endedAt: Long) = SystemClock.elapsedRealtime() - endedAt > MAX_CAPTION_AGE_MS
 
     override fun onDestroy() {
         isRunning = false
@@ -355,7 +398,10 @@ class CaptionService : Service() {
         private const val END_SILENCE_CHUNKS = 4           // ~400 ms pause ends a phrase
         private const val MIN_SPEECH_CHUNKS = 3            // ignore blips under ~300 ms
         private const val MAX_PHRASE_SAMPLES = SAMPLE_RATE * 4
-        private const val RECHECK_LANGUAGE_EVERY = 8
+        private const val RECHECK_LANGUAGE_EVERY = 5
+        private const val SCENE_SILENCE_CHUNKS = 10        // ~1 s of total silence
+        private const val SCENE_NO_SPEECH_CHUNKS = 52      // ~5 s without speech
+        private const val MAX_CAPTION_AGE_MS = 6_000L
         private const val MIN_PHRASE_SAMPLES = SAMPLE_RATE * 11 / 10 // Whisper needs >= 1 s
         private const val MAX_QUEUED_PHRASES = 2
 

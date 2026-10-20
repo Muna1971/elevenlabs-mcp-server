@@ -75,6 +75,13 @@ class SubtitleOverlay(private val context: Context, textSizeSp: Int) {
         attached = false
     }
 
+    /** Removes all subtitles, e.g. when a new video starts. */
+    fun clear() {
+        lastFinal = ""
+        handler.removeCallbacks(hide)
+        box.visibility = View.GONE
+    }
+
     /** Short informational message, e.g. "ready". */
     fun showStatus(message: String) = render(previous = "", current = message)
 

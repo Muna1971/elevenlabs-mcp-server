@@ -15,8 +15,7 @@ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+fp16" CACHE STRING "" FORCE)
 
 FetchContent_Declare(whisper
-    URL https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.8.7.tar.gz
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    URL https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.8.7.tar.gz)
 FetchContent_MakeAvailable(whisper)
 
 add_library(whisperjni SHARED whisper_jni.cpp)

@@ -61,7 +61,6 @@ class SubtitleOverlay(private val context: Context, textSizeSp: Int) {
 
     private var attached = false
     private var lastFinal = ""
-    private var beforeLastFinal = ""
 
     fun show() {
         if (attached) return
@@ -79,15 +78,12 @@ class SubtitleOverlay(private val context: Context, textSizeSp: Int) {
     /** Short informational message, e.g. "ready". */
     fun showStatus(message: String) = render(previous = "", current = message)
 
-    /** In-progress translation of the sentence currently being spoken. */
-    fun showLive(arabic: String) = render(previous = lastFinal, current = arabic)
-
     /** Finished translation of a full sentence. */
     fun showFinal(arabic: String) {
         if (arabic.isBlank()) return
-        beforeLastFinal = lastFinal
+        val previous = lastFinal
         lastFinal = arabic
-        render(previous = beforeLastFinal, current = arabic)
+        render(previous = previous, current = arabic)
     }
 
     private fun render(previous: String, current: String) {

@@ -13,25 +13,30 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.zip.ZipInputStream
 
 /** Downloads (once) and locates the offline speech and translation models. */
 object ModelManager {
 
-    fun speechModelDir(context: Context, lang: SourceLanguage) =
-        File(context.filesDir, "vosk/${lang.voskModel}")
+    private const val SPEECH_MODEL = "ggml-base-q5_1.bin"
+    const val SPEECH_MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$SPEECH_MODEL"
 
-    fun isSpeechModelReady(context: Context, lang: SourceLanguage) =
-        File(speechModelDir(context, lang), READY_MARKER).exists()
+    fun speechModelFile(context: Context) = File(context.filesDir, SPEECH_MODEL)
 
-    fun newArabicTranslator(lang: SourceLanguage): Translator = Translation.getClient(
+    fun isSpeechModelReady(context: Context) = speechModelFile(context).exists()
+
+    /** ML Kit language for a Whisper/ISO code, or null if it cannot be translated offline. */
+    fun mlKitLanguage(code: String): String? = TranslateLanguage.fromLanguageTag(code)
+
+    fun newArabicTranslator(sourceMlKitLanguage: String): Translator = Translation.getClient(
         TranslatorOptions.Builder()
-            .setSourceLanguage(lang.mlKitCode)
+            .setSourceLanguage(sourceMlKitLanguage)
             .setTargetLanguage(TranslateLanguage.ARABIC)
             .build()
     )
 
-    suspend fun ensureTranslationModel(lang: SourceLanguage) {
+    suspend fun ensureTranslationModel(code: String) {
+        val lang = mlKitLanguage(code) ?: return
+        if (lang == TranslateLanguage.ARABIC) return
         val translator = newArabicTranslator(lang)
         try {
             translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
@@ -40,68 +45,40 @@ object ModelManager {
         }
     }
 
-    suspend fun downloadSpeechModel(
-        context: Context,
-        lang: SourceLanguage,
-        onProgress: (Int) -> Unit,
-    ) = withContext(Dispatchers.IO) {
-        val root = File(context.filesDir, "vosk").apply { mkdirs() }
-        val zip = File(context.cacheDir, "${lang.voskModel}.zip")
-        val conn = URL(lang.modelUrl).openConnection() as HttpURLConnection
-        conn.connectTimeout = 20_000
-        conn.readTimeout = 30_000
-        try {
-            if (conn.responseCode !in 200..299) throw IOException("HTTP ${conn.responseCode}")
-            val total = conn.contentLengthLong
-            conn.inputStream.use { input ->
-                zip.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    var done = 0L
-                    var lastPercent = -1
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        out.write(buf, 0, n)
-                        done += n
-                        if (total > 0) {
-                            val percent = (done * 100 / total).toInt()
-                            if (percent != lastPercent) {
-                                lastPercent = percent
-                                withContext(Dispatchers.Main) { onProgress(percent) }
+    suspend fun downloadSpeechModel(context: Context, onProgress: (Int) -> Unit) =
+        withContext(Dispatchers.IO) {
+            val dest = speechModelFile(context)
+            val part = File(dest.path + ".part")
+            val conn = URL(SPEECH_MODEL_URL).openConnection() as HttpURLConnection
+            conn.connectTimeout = 20_000
+            conn.readTimeout = 30_000
+            try {
+                if (conn.responseCode !in 200..299) throw IOException("HTTP ${conn.responseCode}")
+                val total = conn.contentLengthLong
+                conn.inputStream.use { input ->
+                    part.outputStream().use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        var done = 0L
+                        var lastPercent = -1
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            done += n
+                            if (total > 0) {
+                                val percent = (done * 100 / total).toInt()
+                                if (percent != lastPercent) {
+                                    lastPercent = percent
+                                    withContext(Dispatchers.Main) { onProgress(percent) }
+                                }
                             }
                         }
+                        if (total > 0 && done != total) throw IOException("Download incomplete")
                     }
                 }
+            } finally {
+                conn.disconnect()
             }
-        } finally {
-            conn.disconnect()
+            if (!part.renameTo(dest)) throw IOException("Could not install model")
         }
-
-        val tmp = File(root, "${lang.voskModel}.tmp").apply { deleteRecursively(); mkdirs() }
-        val tmpPath = tmp.canonicalPath + File.separator
-        ZipInputStream(zip.inputStream().buffered()).use { zis ->
-            var entry = zis.nextEntry
-            while (entry != null) {
-                val f = File(tmp, entry.name)
-                if (!f.canonicalPath.startsWith(tmpPath)) throw IOException("Bad zip entry")
-                if (entry.isDirectory) {
-                    f.mkdirs()
-                } else {
-                    f.parentFile?.mkdirs()
-                    f.outputStream().use { zis.copyTo(it) }
-                }
-                entry = zis.nextEntry
-            }
-        }
-        zip.delete()
-
-        // The archive normally contains a single top-level folder holding the model.
-        val modelRoot = tmp.listFiles()?.singleOrNull { it.isDirectory } ?: tmp
-        val dest = speechModelDir(context, lang).apply { deleteRecursively() }
-        if (!modelRoot.renameTo(dest)) throw IOException("Could not install model")
-        tmp.deleteRecursively()
-        File(dest, READY_MARKER).writeText("ok")
-    }
-
-    private const val READY_MARKER = ".ready"
 }

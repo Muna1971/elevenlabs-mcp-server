@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">ترجمة فورية</string>
     <string name="title">ترجمة فورية للفيديو إلى العربية</string>
-    <string name="subtitle">افتح أي تطبيق فيديو وستظهر الترجمة العربية فوقه مباشرة. يعمل بالكامل على هاتفك وبدون إنترنت بعد التنزيل الأول.</string>
+    <string name="subtitle">افتح أي تطبيق فيديو وستظهر الترجمة العربية فوقه مباشرة. يكتشف لغة الفيديو تلقائياً، ويعمل بالكامل على هاتفك.</string>
     <string name="source_language">لغة الفيديو</string>
     <string name="text_size">حجم الخط</string>
     <string name="start">ابدأ الترجمة</string>
@@ -13,7 +13,8 @@
     <string name="notif_stop">إيقاف</string>
     <string name="need_overlay">فعّل «الظهور فوق التطبيقات الأخرى» لهذا التطبيق ثم ارجع واضغط ابدأ</string>
     <string name="need_audio">يجب السماح بإذن الصوت حتى يستطيع التطبيق سماع الفيديو</string>
-    <string name="downloading_speech">جارٍ تنزيل حزمة التعرّف على الكلام (مرة واحدة فقط)… %1$d%%</string>
+    <string name="downloading_speech">جارٍ تنزيل محرّك التعرّف على الكلام (~60 ميغابايت، مرة واحدة فقط)… %1$d%%</string>
+    <string name="cpu_unsupported">للأسف معالج هذا الهاتف قديم ولا يدعم محرّك التعرّف على الكلام.</string>
     <string name="downloading_translation">جارٍ تنزيل حزمة الترجمة إلى العربية (مرة واحدة فقط)…</string>
     <string name="download_failed">فشل التنزيل، تأكد من الاتصال بالإنترنت: %1$s</string>
     <string name="ready">جاهز ✓</string>

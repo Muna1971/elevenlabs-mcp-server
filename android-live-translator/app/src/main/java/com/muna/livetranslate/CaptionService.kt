@@ -22,25 +22,21 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
-import com.google.mlkit.nl.translate.Translator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import org.vosk.LibVosk
-import org.vosk.LogLevel
-import org.vosk.Model
-import org.vosk.Recognizer
+import java.util.Locale
+import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.TimeUnit
+import kotlin.math.sqrt
 
 /**
- * Captures the audio other apps are playing, recognises speech offline (Vosk)
+ * Captures the audio other apps are playing, cuts it into spoken phrases,
+ * recognises each phrase offline with Whisper (which also detects the language)
  * and shows an Arabic translation (ML Kit, offline) in a floating overlay.
  */
 class CaptionService : Service() {
@@ -50,16 +46,15 @@ class CaptionService : Service() {
 
     private var projection: MediaProjection? = null
     private var recorder: AudioRecord? = null
-    private var model: Model? = null
-    private var recognizer: Recognizer? = null
-    private var translator: Translator? = null
+    private var translator: ArabicTranslator? = null
     private var overlay: SubtitleOverlay? = null
-    private var worker: Thread? = null
+    private var captureThread: Thread? = null
+    private var speechThread: Thread? = null
     @Volatile private var listening = false
 
-    private val finals = Channel<String>(Channel.UNLIMITED)
-    private val partial = MutableStateFlow("")
-    @Volatile private var segment = 0
+    /** Spoken phrases waiting for recognition (16 kHz mono floats). */
+    private val phrases = LinkedBlockingDeque<FloatArray>()
+    private val recognised = Channel<WhisperEngine.Result>(Channel.UNLIMITED)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -90,14 +85,15 @@ class CaptionService : Service() {
 
         isRunning = true
         val prefs = Prefs(this)
-        val lang = prefs.language
         overlay = SubtitleOverlay(this, prefs.textSize).also {
             it.show()
             it.showStatus("جارٍ التحضير…")
         }
-        translator = ModelManager.newArabicTranslator(lang)
+        translator = ArabicTranslator { lang ->
+            mainHandler.post { overlay?.showStatus("جارٍ تنزيل ترجمة ${languageName(lang)} (مرة واحدة)…") }
+        }
         startTranslationPipeline()
-        startRecognition(lang)
+        startListening(prefs.language)
         return START_NOT_STICKY
     }
 
@@ -127,7 +123,7 @@ class CaptionService : Service() {
         )
     }
 
-    private fun startRecognition(lang: SourceLanguage) {
+    private fun startListening(lang: SourceLanguage) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -150,7 +146,7 @@ class CaptionService : Service() {
         val rec = try {
             AudioRecord.Builder()
                 .setAudioFormat(format)
-                .setBufferSizeInBytes(maxOf(minBuffer, CHUNK_BYTES * 8))
+                .setBufferSizeInBytes(maxOf(minBuffer, CHUNK_SAMPLES * 2 * 10))
                 .setAudioPlaybackCaptureConfig(captureConfig)
                 .build()
         } catch (e: Exception) {
@@ -161,94 +157,142 @@ class CaptionService : Service() {
         recorder = rec
         listening = true
 
-        worker = Thread({
+        speechThread = Thread({
+            val engine = WhisperEngine.load(ModelManager.speechModelFile(this))
+            if (engine == null) {
+                mainHandler.post { overlay?.showStatus("تعذّر تحميل نموذج التعرّف على الكلام") }
+                return@Thread
+            }
             try {
-                LibVosk.setLogLevel(LogLevel.WARNINGS)
-                val m = Model(ModelManager.speechModelDir(this, lang).absolutePath)
-                val r = Recognizer(m, SAMPLE_RATE.toFloat())
-                model = m
-                recognizer = r
                 rec.startRecording()
                 mainHandler.post { overlay?.showStatus(getString(R.string.listening)) }
-                recognitionLoop(rec, r)
+                captureThread = Thread({ captureLoop(rec) }, "audio-capture").apply { start() }
+                recognitionLoop(engine, lang)
             } catch (e: Exception) {
                 Log.e(TAG, "Recognition failed", e)
                 mainHandler.post { overlay?.showStatus("حدث خطأ في التعرّف على الكلام") }
+            } finally {
+                engine.close()
             }
         }, "speech-recognition").apply { start() }
     }
 
-    private fun recognitionLoop(rec: AudioRecord, r: Recognizer) {
-        val buf = ByteArray(CHUNK_BYTES)
-        var lastPartial = ""
+    /** Splits the captured audio into phrases at pauses (simple energy-based voice detection). */
+    private fun captureLoop(rec: AudioRecord) {
+        val chunk = ShortArray(CHUNK_SAMPLES)
+        val preRoll = ArrayDeque<FloatArray>()
+        val phrase = ArrayList<FloatArray>()
+        var phraseSamples = 0
+        var speaking = false
+        var silentChunks = 0
+        var speechChunks = 0
+
+        fun flush() {
+            if (speechChunks >= MIN_SPEECH_CHUNKS) {
+                val out = FloatArray(maxOf(phraseSamples, MIN_PHRASE_SAMPLES))
+                var pos = 0
+                for (part in phrase) {
+                    part.copyInto(out, pos)
+                    pos += part.size
+                }
+                // Keep latency low: if recognition falls behind, drop the oldest phrase.
+                while (phrases.size >= MAX_QUEUED_PHRASES) phrases.pollFirst()
+                phrases.offerLast(out)
+            }
+            phrase.clear()
+            phraseSamples = 0
+            speechChunks = 0
+            silentChunks = 0
+        }
+
         while (listening) {
-            val n = rec.read(buf, 0, buf.size)
+            val n = rec.read(chunk, 0, chunk.size)
             if (n <= 0) {
                 if (n == AudioRecord.ERROR_INVALID_OPERATION || n == AudioRecord.ERROR_DEAD_OBJECT) break
                 continue
             }
-            if (r.acceptWaveForm(buf, n)) {
-                lastPartial = ""
-                onFinal(JSONObject(r.result).optString("text"))
-            } else {
-                val p = JSONObject(r.partialResult).optString("partial").trim()
-                if (p.length > MAX_SEGMENT_CHARS) {
-                    // Long monologue without a pause: cut it so the subtitle stays readable.
-                    lastPartial = ""
-                    onFinal(JSONObject(r.finalResult).optString("text"))
-                } else if (p != lastPartial) {
-                    lastPartial = p
-                    partial.value = p
+            val samples = FloatArray(n) { chunk[it] / 32768f }
+            var energy = 0.0
+            for (s in samples) energy += s * s
+            val loud = sqrt(energy / n) > SPEECH_RMS
+
+            if (!speaking) {
+                preRoll.addLast(samples)
+                if (preRoll.size > PRE_ROLL_CHUNKS) preRoll.removeFirst()
+                if (!loud) continue
+                speaking = true
+                for (p in preRoll) {
+                    phrase.add(p)
+                    phraseSamples += p.size
                 }
+                preRoll.clear()
+                speechChunks = 1
+                continue
+            }
+
+            phrase.add(samples)
+            phraseSamples += samples.size
+            if (loud) {
+                speechChunks++
+                silentChunks = 0
+            } else {
+                silentChunks++
+            }
+            if (silentChunks >= END_SILENCE_CHUNKS) {
+                flush()
+                speaking = false
+            } else if (phraseSamples >= MAX_PHRASE_SAMPLES) {
+                // Continuous speech or music: cut here and keep listening.
+                flush()
             }
         }
     }
 
-    private fun onFinal(text: String) {
-        val t = text.trim()
-        if (t.isEmpty()) return
-        segment++
-        partial.value = ""
-        finals.trySend(t)
+    private fun recognitionLoop(engine: WhisperEngine, lang: SourceLanguage) {
+        while (listening) {
+            val audio = phrases.pollFirst(200, TimeUnit.MILLISECONDS) ?: continue
+            val result = engine.transcribe(audio, lang.code) ?: continue
+            val text = cleanUp(result.text) ?: continue
+            val detected = if (lang == SourceLanguage.AUTO) result.language else lang.code
+            recognised.trySend(WhisperEngine.Result(detected, text))
+        }
+    }
+
+    /** Removes sound tags such as "[Music]" and Whisper's typical silence hallucinations. */
+    private fun cleanUp(raw: String): String? {
+        val text = raw.replace(SOUND_TAGS, " ").replace(Regex("\\s+"), " ").trim()
+        if (text.length < 2 || text.none { it.isLetter() }) return null
+        val lower = text.lowercase(Locale.ROOT)
+        if (HALLUCINATIONS.any { it in lower }) return null
+        return text
     }
 
     private fun startTranslationPipeline() {
         scope.launch {
-            for (text in finals) {
-                val arabic = translate(text)
-                withContext(Dispatchers.Main) { overlay?.showFinal(arabic) }
-            }
-        }
-        scope.launch {
-            partial.collect { text ->
-                if (text.isBlank()) return@collect
-                val seg = segment
-                val arabic = translate(text)
-                if (seg == segment && arabic.isNotBlank()) {
-                    withContext(Dispatchers.Main) { overlay?.showLive(arabic) }
+            for (r in recognised) {
+                val arabic = try {
+                    translator?.translate(r.text, r.language) ?: r.text
+                } catch (e: Exception) {
+                    Log.w(TAG, "Translation failed", e)
+                    r.text
                 }
-                delay(PARTIAL_THROTTLE_MS)
+                withContext(Dispatchers.Main) { overlay?.showFinal(arabic) }
             }
         }
     }
 
-    private suspend fun translate(text: String): String = try {
-        translator?.translate(text)?.await().orEmpty()
-    } catch (e: Exception) {
-        Log.w(TAG, "Translation failed", e)
-        ""
-    }
+    private fun languageName(mlKitLanguage: String) =
+        Locale.forLanguageTag(mlKitLanguage).getDisplayLanguage(Locale.forLanguageTag("ar"))
 
     override fun onDestroy() {
         isRunning = false
         listening = false
         scope.cancel()
-        finals.close()
+        recognised.close()
         runCatching { recorder?.stop() }
-        worker?.join(1_000)
+        captureThread?.join(1_000)
+        speechThread?.join(3_000)
         runCatching { recorder?.release() }
-        runCatching { recognizer?.close() }
-        runCatching { model?.close() }
         translator?.close()
         overlay?.remove()
         projection?.stop()
@@ -264,9 +308,22 @@ class CaptionService : Service() {
         private const val TAG = "CaptionService"
         private const val CHANNEL_ID = "captions"
         private const val NOTIFICATION_ID = 1
+
         private const val SAMPLE_RATE = 16_000
-        private const val CHUNK_BYTES = 3_200 // 100 ms of 16-bit mono audio
-        private const val MAX_SEGMENT_CHARS = 160
-        private const val PARTIAL_THROTTLE_MS = 250L
+        private const val CHUNK_SAMPLES = 1_600            // 100 ms
+        private const val SPEECH_RMS = 0.012
+        private const val PRE_ROLL_CHUNKS = 3              // keep 300 ms before speech starts
+        private const val END_SILENCE_CHUNKS = 5           // 500 ms pause ends a phrase
+        private const val MIN_SPEECH_CHUNKS = 4            // ignore blips under 400 ms
+        private const val MAX_PHRASE_SAMPLES = SAMPLE_RATE * 6
+        private const val MIN_PHRASE_SAMPLES = SAMPLE_RATE * 11 / 10 // Whisper needs >= 1 s
+        private const val MAX_QUEUED_PHRASES = 2
+
+        private val SOUND_TAGS = Regex("\\[[^\\]]*\\]|\\([^)]*\\)|\\*[^*]*\\*|[♪♫]")
+        private val HALLUCINATIONS = listOf(
+            "thank you for watching", "thanks for watching", "please subscribe",
+            "subtitles by", "amara.org", "sous-titres", "untertitel",
+            "اشتركوا في القناة", "ترجمة نانسي", "شكرا للمشاهدة", "شكراً للمشاهدة",
+        )
     }
 }

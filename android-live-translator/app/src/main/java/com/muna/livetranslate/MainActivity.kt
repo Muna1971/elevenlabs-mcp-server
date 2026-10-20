@@ -129,17 +129,24 @@ class MainActivity : AppCompatActivity() {
         setBusy(true)
         lifecycleScope.launch {
             try {
-                if (!ModelManager.isSpeechModelReady(this@MainActivity, lang)) {
+                if (!WhisperEngine.isCpuSupported()) {
+                    status.text = getString(R.string.cpu_unsupported)
+                    return@launch
+                }
+                if (!ModelManager.isSpeechModelReady(this@MainActivity)) {
                     progress.isIndeterminate = false
                     status.text = getString(R.string.downloading_speech, 0)
-                    ModelManager.downloadSpeechModel(this@MainActivity, lang) { percent ->
+                    ModelManager.downloadSpeechModel(this@MainActivity) { percent ->
                         progress.progress = percent
                         status.text = getString(R.string.downloading_speech, percent)
                     }
                 }
                 progress.isIndeterminate = true
                 status.text = getString(R.string.downloading_translation)
-                ModelManager.ensureTranslationModel(lang)
+                // In auto mode English is fetched up front; other languages are fetched when first heard.
+                ModelManager.ensureTranslationModel(
+                    if (lang == SourceLanguage.AUTO) SourceLanguage.ENGLISH.code else lang.code
+                )
                 status.text = getString(R.string.ready)
                 launchCapturePrompt()
             } catch (e: Exception) {

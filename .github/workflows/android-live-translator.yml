@@ -19,13 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check offline speech model links
+      - name: Check speech model link
         run: |
-          for m in $(grep -o 'vosk-model-small-[a-z0-9.-]*' app/src/main/java/com/muna/livetranslate/SourceLanguage.kt); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "https://alphacephei.com/vosk/models/$m.zip")
-            echo "$m -> $code"
-            [ "$code" = "200" ] || exit 1
-          done
+          url=$(grep -o 'https://huggingface.co/[^"]*' app/src/main/java/com/muna/livetranslate/ModelManager.kt | sed 's/\$SPEECH_MODEL/ggml-base-q5_1.bin/')
+          code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$url")
+          echo "$url -> $code"
+          [ "$code" = "200" ]
 
       - uses: actions/setup-java@v4
         with:
@@ -37,10 +36,10 @@ jobs:
           gradle-version: '8.14.3'
 
       - name: Build APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk LiveArabicSubtitles.apk
+        run: cp app/build/outputs/apk/release/app-release.apk LiveArabicSubtitles.apk
 
       - uses: actions/upload-artifact@v4
         with:

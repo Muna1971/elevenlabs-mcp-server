@@ -7,7 +7,7 @@ class Prefs(context: Context) {
 
     var language: SourceLanguage
         get() = SourceLanguage.entries.firstOrNull { it.name == sp.getString(KEY_LANGUAGE, null) }
-            ?: SourceLanguage.ENGLISH
+            ?: SourceLanguage.AUTO
         set(value) = sp.edit().putString(KEY_LANGUAGE, value.name).apply()
 
     /** Subtitle text size in sp. */

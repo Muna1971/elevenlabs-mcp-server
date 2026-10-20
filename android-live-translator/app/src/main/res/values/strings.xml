@@ -15,7 +15,7 @@
     <string name="need_audio">يجب السماح بإذن الصوت حتى يستطيع التطبيق سماع الفيديو</string>
     <string name="downloading_speech">جارٍ تنزيل محرّك التعرّف على الكلام (~60 ميغابايت، مرة واحدة فقط)… %1$d%%</string>
     <string name="cpu_unsupported">للأسف معالج هذا الهاتف قديم ولا يدعم محرّك التعرّف على الكلام.</string>
-    <string name="downloading_translation">جارٍ تنزيل حزمة الترجمة إلى العربية (مرة واحدة فقط)…</string>
+    <string name="downloading_translation">جارٍ تنزيل حزمة الترجمة إلى العربية (~20 ميغابايت، مرة واحدة فقط)… %1$d%%</string>
     <string name="download_failed">فشل التنزيل، تأكد من الاتصال بالإنترنت: %1$s</string>
     <string name="ready">جاهز ✓</string>
     <string name="listening">جاهز… شغّل الفيديو الآن</string>

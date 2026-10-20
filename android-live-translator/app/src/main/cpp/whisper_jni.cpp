@@ -2,8 +2,14 @@
 #include <string>
 #include "whisper.h"
 
+namespace {
+// whisper.cpp logs every call (including each VAD chunk); keep logcat quiet.
+void quiet_log(enum ggml_log_level, const char *, void *) {}
+}
+
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_muna_livetranslate_WhisperEngine_nativeInit(JNIEnv *env, jclass, jstring modelPath) {
+    whisper_log_set(quiet_log, nullptr);
     const char *path = env->GetStringUTFChars(modelPath, nullptr);
     whisper_context_params cparams = whisper_context_default_params();
     cparams.use_gpu = false;
@@ -70,4 +76,45 @@ Java_com_muna_livetranslate_WhisperEngine_nativeTranscribe(
     env->SetByteArrayRegion(result, 0, static_cast<jsize>(out.size()),
                             reinterpret_cast<const jbyte *>(out.data()));
     return result;
+}
+
+// --- Silero voice activity detection (streaming) ---
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_muna_livetranslate_VoiceDetector_nativeInit(JNIEnv *env, jclass, jstring modelPath) {
+    whisper_log_set(quiet_log, nullptr);
+    const char *path = env->GetStringUTFChars(modelPath, nullptr);
+    whisper_vad_context_params vparams = whisper_vad_default_context_params();
+    vparams.n_threads = 1;
+    vparams.use_gpu = false;
+    whisper_vad_context *vctx = whisper_vad_init_from_file_with_params(path, vparams);
+    env->ReleaseStringUTFChars(modelPath, path);
+    return reinterpret_cast<jlong>(vctx);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_muna_livetranslate_VoiceDetector_nativeFree(JNIEnv *, jclass, jlong handle) {
+    whisper_vad_free(reinterpret_cast<whisper_vad_context *>(handle));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_muna_livetranslate_VoiceDetector_nativeReset(JNIEnv *, jclass, jlong handle) {
+    whisper_vad_reset_state(reinterpret_cast<whisper_vad_context *>(handle));
+}
+
+/** Highest speech probability (0..1) over the given samples, keeping state between calls. */
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_muna_livetranslate_VoiceDetector_nativeSpeechProbability(
+        JNIEnv *env, jclass, jlong handle, jfloatArray samples) {
+    auto *vctx = reinterpret_cast<whisper_vad_context *>(handle);
+    const jsize n = env->GetArrayLength(samples);
+    jfloat *data = env->GetFloatArrayElements(samples, nullptr);
+    const bool ok = whisper_vad_detect_speech_no_reset(vctx, data, n);
+    env->ReleaseFloatArrayElements(samples, data, JNI_ABORT);
+    if (!ok) return 0.0f;
+    float best = 0.0f;
+    const int count = whisper_vad_n_probs(vctx);
+    const float *probs = whisper_vad_probs(vctx);
+    for (int i = 0; i < count; ++i) best = probs[i] > best ? probs[i] : best;
+    return best;
 }

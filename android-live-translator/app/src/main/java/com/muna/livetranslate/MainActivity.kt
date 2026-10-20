@@ -124,7 +124,6 @@ class MainActivity : AppCompatActivity() {
 
     /** Downloads the offline models the first time a language is used, then asks for audio capture. */
     private fun prepareModelsThenCapture() {
-        val lang = prefs.language
         preparing = true
         setBusy(true)
         lifecycleScope.launch {
@@ -133,20 +132,23 @@ class MainActivity : AppCompatActivity() {
                     status.text = getString(R.string.cpu_unsupported)
                     return@launch
                 }
-                if (!ModelManager.isSpeechModelReady(this@MainActivity)) {
+                if (!ModelManager.isSpeechReady(this@MainActivity)) {
                     progress.isIndeterminate = false
                     status.text = getString(R.string.downloading_speech, 0)
-                    ModelManager.downloadSpeechModel(this@MainActivity) { percent ->
+                    ModelManager.downloadSpeechModels(this@MainActivity) { percent ->
                         progress.progress = percent
                         status.text = getString(R.string.downloading_speech, percent)
                     }
                 }
-                progress.isIndeterminate = true
-                status.text = getString(R.string.downloading_translation)
-                // In auto mode English is fetched up front; other languages are fetched when first heard.
-                ModelManager.ensureTranslationModel(
-                    if (lang == SourceLanguage.AUTO) SourceLanguage.ENGLISH.code else lang.code
-                )
+                // English -> Arabic is needed for every language (others go through English).
+                if (!ModelManager.isBergamotReady(this@MainActivity, ArabicTranslator.EN_AR)) {
+                    progress.isIndeterminate = false
+                    status.text = getString(R.string.downloading_translation, 0)
+                    ModelManager.downloadBergamot(this@MainActivity, ArabicTranslator.EN_AR) { percent ->
+                        progress.progress = percent
+                        status.text = getString(R.string.downloading_translation, percent)
+                    }
+                }
                 status.text = getString(R.string.ready)
                 launchCapturePrompt()
             } catch (e: Exception) {

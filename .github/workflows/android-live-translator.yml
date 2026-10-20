@@ -19,12 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check speech model link
+      - name: Check model download links
         run: |
-          url=$(grep -o 'https://huggingface.co/[^"]*' app/src/main/java/com/muna/livetranslate/ModelManager.kt | sed 's/\$SPEECH_MODEL/ggml-base-q5_1.bin/')
-          code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$url")
-          echo "$url -> $code"
-          [ "$code" = "200" ]
+          base=$(python3 -c "import json;print(json.load(open('app/src/main/assets/bergamot_models.json'))['baseUrl'])")
+          enar=$(python3 -c "import json;print(json.load(open('app/src/main/assets/bergamot_models.json'))['pairs']['en-ar']['model'])")
+          for url in \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin \
+            https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin \
+            "$base/$enar"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L "$url")
+            echo "$url -> $code"
+            [ "$code" = "200" ]
+          done
 
       - uses: actions/setup-java@v4
         with:

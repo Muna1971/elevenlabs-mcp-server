@@ -22,7 +22,7 @@ class WhisperEngine private constructor(private var handle: Long) : AutoCloseabl
 
     companion object {
         init {
-            System.loadLibrary("whisperjni")
+            System.loadLibrary("nativecore")
         }
 
         private val THREADS = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)

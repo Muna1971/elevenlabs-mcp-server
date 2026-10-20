@@ -32,7 +32,6 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
-import kotlin.math.sqrt
 
 /**
  * Captures the audio other apps are playing, cuts it into spoken phrases,
@@ -89,8 +88,8 @@ class CaptionService : Service() {
             it.show()
             it.showStatus("جارٍ التحضير…")
         }
-        translator = ArabicTranslator { lang ->
-            mainHandler.post { overlay?.showStatus("جارٍ تنزيل ترجمة ${languageName(lang)} (مرة واحدة)…") }
+        translator = ArabicTranslator(this, scope) { message ->
+            mainHandler.post { overlay?.showStatus(message) }
         }
         startTranslationPipeline()
         startListening(prefs.language)
@@ -166,7 +165,15 @@ class CaptionService : Service() {
             try {
                 rec.startRecording()
                 mainHandler.post { overlay?.showStatus(getString(R.string.listening)) }
-                captureThread = Thread({ captureLoop(rec) }, "audio-capture").apply { start() }
+                val vad = VoiceDetector.load(ModelManager.vadModelFile(this))
+                    ?: throw IllegalStateException("VAD model failed to load")
+                captureThread = Thread({
+                    try {
+                        captureLoop(rec, vad)
+                    } finally {
+                        vad.close()
+                    }
+                }, "audio-capture").apply { start() }
                 recognitionLoop(engine, lang)
             } catch (e: Exception) {
                 Log.e(TAG, "Recognition failed", e)
@@ -177,8 +184,8 @@ class CaptionService : Service() {
         }, "speech-recognition").apply { start() }
     }
 
-    /** Splits the captured audio into phrases at pauses (simple energy-based voice detection). */
-    private fun captureLoop(rec: AudioRecord) {
+    /** Splits the captured audio into spoken phrases using Silero voice detection. */
+    private fun captureLoop(rec: AudioRecord, vad: VoiceDetector) {
         val chunk = ShortArray(CHUNK_SAMPLES)
         val preRoll = ArrayDeque<FloatArray>()
         val phrase = ArrayList<FloatArray>()
@@ -206,15 +213,13 @@ class CaptionService : Service() {
         }
 
         while (listening) {
-            val n = rec.read(chunk, 0, chunk.size)
+            val n = rec.read(chunk, 0, chunk.size, AudioRecord.READ_BLOCKING)
             if (n <= 0) {
                 if (n == AudioRecord.ERROR_INVALID_OPERATION || n == AudioRecord.ERROR_DEAD_OBJECT) break
                 continue
             }
             val samples = FloatArray(n) { chunk[it] / 32768f }
-            var energy = 0.0
-            for (s in samples) energy += s * s
-            val loud = sqrt(energy / n) > SPEECH_RMS
+            val loud = vad.speechProbability(samples) > SPEECH_PROBABILITY
 
             if (!speaking) {
                 preRoll.addLast(samples)
@@ -270,19 +275,11 @@ class CaptionService : Service() {
     private fun startTranslationPipeline() {
         scope.launch {
             for (r in recognised) {
-                val arabic = try {
-                    translator?.translate(r.text, r.language) ?: r.text
-                } catch (e: Exception) {
-                    Log.w(TAG, "Translation failed", e)
-                    r.text
-                }
+                val arabic = translator?.translate(r.text, r.language) ?: r.text
                 withContext(Dispatchers.Main) { overlay?.showFinal(arabic) }
             }
         }
     }
-
-    private fun languageName(mlKitLanguage: String) =
-        Locale.forLanguageTag(mlKitLanguage).getDisplayLanguage(Locale.forLanguageTag("ar"))
 
     override fun onDestroy() {
         isRunning = false
@@ -310,11 +307,11 @@ class CaptionService : Service() {
         private const val NOTIFICATION_ID = 1
 
         private const val SAMPLE_RATE = 16_000
-        private const val CHUNK_SAMPLES = 1_600            // 100 ms
-        private const val SPEECH_RMS = 0.012
-        private const val PRE_ROLL_CHUNKS = 3              // keep 300 ms before speech starts
-        private const val END_SILENCE_CHUNKS = 5           // 500 ms pause ends a phrase
-        private const val MIN_SPEECH_CHUNKS = 4            // ignore blips under 400 ms
+        private const val CHUNK_SAMPLES = VoiceDetector.WINDOW * 3 // 96 ms
+        private const val SPEECH_PROBABILITY = 0.5f
+        private const val PRE_ROLL_CHUNKS = 3              // keep ~300 ms before speech starts
+        private const val END_SILENCE_CHUNKS = 5           // ~500 ms pause ends a phrase
+        private const val MIN_SPEECH_CHUNKS = 3            // ignore blips under ~300 ms
         private const val MAX_PHRASE_SAMPLES = SAMPLE_RATE * 6
         private const val MIN_PHRASE_SAMPLES = SAMPLE_RATE * 11 / 10 // Whisper needs >= 1 s
         private const val MAX_QUEUED_PHRASES = 2

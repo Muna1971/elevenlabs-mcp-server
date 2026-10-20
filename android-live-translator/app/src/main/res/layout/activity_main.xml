@@ -38,6 +38,56 @@
             android:layout_height="48dp" />
 
         <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/speed_title"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/speedGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/speedFast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/speed_fast" />
+
+            <RadioButton
+                android:id="@+id/speedAccurate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/speed_accurate" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/source_title"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/sourceGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/sourceInternal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/source_internal" />
+
+            <RadioButton
+                android:id="@+id/sourceMic"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/source_mic" />
+        </RadioGroup>
+
+        <TextView
             android:id="@+id/textSizeLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

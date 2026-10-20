@@ -25,7 +25,17 @@ class WhisperEngine private constructor(private var handle: Long) : AutoCloseabl
             System.loadLibrary("nativecore")
         }
 
-        private val THREADS = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+        /** One thread per fast ("big") core: little cores only slow the others down. */
+        private val THREADS: Int by lazy {
+            val maxFreqs = (0 until Runtime.getRuntime().availableProcessors()).mapNotNull { cpu ->
+                runCatching {
+                    File("/sys/devices/system/cpu/cpu$cpu/cpufreq/cpuinfo_max_freq").readText().trim().toLong()
+                }.getOrNull()
+            }
+            val top = maxFreqs.maxOrNull()
+            val bigCores = if (top == null) 4 else maxFreqs.count { it >= top * 0.7 }
+            bigCores.coerceIn(2, 4)
+        }
 
         fun load(model: File): WhisperEngine? =
             nativeInit(model.absolutePath).takeIf { it != 0L }?.let { WhisperEngine(it) }

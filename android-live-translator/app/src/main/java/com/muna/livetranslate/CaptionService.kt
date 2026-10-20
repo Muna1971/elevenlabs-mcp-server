@@ -12,11 +12,13 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -32,6 +34,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /**
  * Captures the audio other apps are playing, cuts it into spoken phrases,
@@ -62,22 +65,10 @@ class CaptionService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        startInForeground()
-        if (projection != null) return START_NOT_STICKY
-
-        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-        val data = intent?.let { IntentCompat.getParcelableExtra(it, EXTRA_RESULT_DATA, Intent::class.java) }
-        if (data == null) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        val mpm = getSystemService(MediaProjectionManager::class.java)
-        projection = mpm.getMediaProjection(resultCode, data)?.also {
-            it.registerCallback(object : MediaProjection.Callback() {
-                override fun onStop() = stopSelf()
-            }, mainHandler)
-        }
-        if (projection == null) {
+        if (isRunning) return START_NOT_STICKY
+        val useMic = intent?.action == ACTION_START_MIC
+        startInForeground(useMic)
+        if (!useMic && !obtainProjection(intent)) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -92,11 +83,24 @@ class CaptionService : Service() {
             mainHandler.post { overlay?.showStatus(message) }
         }
         startTranslationPipeline()
-        startListening(prefs.language)
+        startListening(prefs)
         return START_NOT_STICKY
     }
 
-    private fun startInForeground() {
+    private fun obtainProjection(intent: Intent?): Boolean {
+        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
+        val data = intent?.let { IntentCompat.getParcelableExtra(it, EXTRA_RESULT_DATA, Intent::class.java) }
+        if (data == null) return false
+        val mpm = getSystemService(MediaProjectionManager::class.java)
+        projection = mpm.getMediaProjection(resultCode, data)?.also {
+            it.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() = stopSelf()
+            }, mainHandler)
+        }
+        return projection != null
+    }
+
+    private fun startInForeground(useMic: Boolean) {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, getString(R.string.channel_name), NotificationManager.IMPORTANCE_LOW)
@@ -118,22 +122,20 @@ class CaptionService : Service() {
             .setOngoing(true)
             .build()
         ServiceCompat.startForeground(
-            this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            this, NOTIFICATION_ID, notification,
+            if (useMic) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            else ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
         )
     }
 
-    private fun startListening(lang: SourceLanguage) {
+    private fun startListening(prefs: Prefs) {
+        val lang = prefs.language
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
             stopSelf()
             return
         }
-        val captureConfig = AudioPlaybackCaptureConfiguration.Builder(projection!!)
-            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-            .addMatchingUsage(AudioAttributes.USAGE_GAME)
-            .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-            .build()
         val format = AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
             .setSampleRate(SAMPLE_RATE)
@@ -143,11 +145,24 @@ class CaptionService : Service() {
             SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
         val rec = try {
-            AudioRecord.Builder()
+            val builder = AudioRecord.Builder()
                 .setAudioFormat(format)
                 .setBufferSizeInBytes(maxOf(minBuffer, CHUNK_SAMPLES * 2 * 10))
-                .setAudioPlaybackCaptureConfig(captureConfig)
-                .build()
+            val mediaProjection = projection
+            if (mediaProjection != null) {
+                // Internal audio of other apps (needs the screen-sharing permission; no video is captured).
+                builder.setAudioPlaybackCaptureConfig(
+                    AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
+                        .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                        .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                        .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+                        .build()
+                )
+            } else {
+                // Microphone mode: hears the video through the phone's speaker.
+                builder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            }
+            builder.build()
         } catch (e: Exception) {
             Log.e(TAG, "AudioRecord failed", e)
             overlay?.showStatus("تعذّر التقاط الصوت")
@@ -157,7 +172,8 @@ class CaptionService : Service() {
         listening = true
 
         speechThread = Thread({
-            val engine = WhisperEngine.load(ModelManager.speechModelFile(this))
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            val engine = WhisperEngine.load(ModelManager.speechModelFile(this, prefs.accurate))
             if (engine == null) {
                 mainHandler.post { overlay?.showStatus("تعذّر تحميل نموذج التعرّف على الكلام") }
                 return@Thread
@@ -219,7 +235,10 @@ class CaptionService : Service() {
                 continue
             }
             val samples = FloatArray(n) { chunk[it] / 32768f }
-            val loud = vad.speechProbability(samples) > SPEECH_PROBABILITY
+            var peak = 0f
+            for (v in samples) if (abs(v) > peak) peak = abs(v)
+            // Nothing playing (digital silence): skip the neural voice detector to save battery.
+            val loud = peak > SILENCE_PEAK && vad.speechProbability(samples) > SPEECH_PROBABILITY
 
             if (!speaking) {
                 preRoll.addLast(samples)
@@ -253,12 +272,33 @@ class CaptionService : Service() {
         }
     }
 
+    /**
+     * Language detection costs a second full encoder pass per phrase, so once the same
+     * language was detected twice in a row it is locked in and only re-checked now and then.
+     */
     private fun recognitionLoop(engine: WhisperEngine, lang: SourceLanguage) {
+        var locked: String? = null
+        var lastDetected = ""
+        var streak = 0
+        var sinceCheck = 0
         while (listening) {
             val audio = phrases.pollFirst(200, TimeUnit.MILLISECONDS) ?: continue
-            val result = engine.transcribe(audio, lang.code) ?: continue
+            val request = when {
+                lang != SourceLanguage.AUTO -> lang.code
+                locked != null && sinceCheck < RECHECK_LANGUAGE_EVERY -> locked
+                else -> "auto"
+            }
+            val result = engine.transcribe(audio, request) ?: continue
+            val detected = if (request == "auto") result.language else request
+            if (request == "auto") {
+                sinceCheck = 0
+                streak = if (detected == lastDetected) streak + 1 else 1
+                lastDetected = detected
+                locked = if (detected.isNotEmpty() && (detected == locked || streak >= 2)) detected else null
+            } else {
+                sinceCheck++
+            }
             val text = cleanUp(result.text) ?: continue
-            val detected = if (lang == SourceLanguage.AUTO) result.language else lang.code
             recognised.trySend(WhisperEngine.Result(detected, text))
         }
     }
@@ -300,6 +340,7 @@ class CaptionService : Service() {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         const val ACTION_STOP = "com.muna.livetranslate.STOP"
+        const val ACTION_START_MIC = "com.muna.livetranslate.START_MIC"
         @Volatile var isRunning = false
 
         private const val TAG = "CaptionService"
@@ -309,10 +350,12 @@ class CaptionService : Service() {
         private const val SAMPLE_RATE = 16_000
         private const val CHUNK_SAMPLES = VoiceDetector.WINDOW * 3 // 96 ms
         private const val SPEECH_PROBABILITY = 0.5f
+        private const val SILENCE_PEAK = 0.003f
         private const val PRE_ROLL_CHUNKS = 3              // keep ~300 ms before speech starts
-        private const val END_SILENCE_CHUNKS = 5           // ~500 ms pause ends a phrase
+        private const val END_SILENCE_CHUNKS = 4           // ~400 ms pause ends a phrase
         private const val MIN_SPEECH_CHUNKS = 3            // ignore blips under ~300 ms
-        private const val MAX_PHRASE_SAMPLES = SAMPLE_RATE * 6
+        private const val MAX_PHRASE_SAMPLES = SAMPLE_RATE * 4
+        private const val RECHECK_LANGUAGE_EVERY = 8
         private const val MIN_PHRASE_SAMPLES = SAMPLE_RATE * 11 / 10 // Whisper needs >= 1 s
         private const val MAX_QUEUED_PHRASES = 2
 

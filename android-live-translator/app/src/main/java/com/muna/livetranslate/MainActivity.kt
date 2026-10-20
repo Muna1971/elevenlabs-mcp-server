@@ -14,6 +14,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.ProgressBar
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
@@ -29,6 +30,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private lateinit var languageSpinner: Spinner
     private lateinit var textSizeSeek: SeekBar
+    private lateinit var speedGroup: RadioGroup
+    private lateinit var sourceGroup: RadioGroup
     private lateinit var preview: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
@@ -63,6 +66,8 @@ class MainActivity : AppCompatActivity() {
 
         languageSpinner = findViewById(R.id.languageSpinner)
         textSizeSeek = findViewById(R.id.textSizeSeek)
+        speedGroup = findViewById(R.id.speedGroup)
+        sourceGroup = findViewById(R.id.sourceGroup)
         preview = findViewById(R.id.preview)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
@@ -80,6 +85,11 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
+
+        speedGroup.check(if (prefs.accurate) R.id.speedAccurate else R.id.speedFast)
+        speedGroup.setOnCheckedChangeListener { _, id -> prefs.accurate = id == R.id.speedAccurate }
+        sourceGroup.check(if (prefs.useMicrophone) R.id.sourceMic else R.id.sourceInternal)
+        sourceGroup.setOnCheckedChangeListener { _, id -> prefs.useMicrophone = id == R.id.sourceMic }
 
         textSizeSeek.progress = prefs.textSize - Prefs.MIN_TEXT_SIZE
         applyPreviewSize()
@@ -132,10 +142,10 @@ class MainActivity : AppCompatActivity() {
                     status.text = getString(R.string.cpu_unsupported)
                     return@launch
                 }
-                if (!ModelManager.isSpeechReady(this@MainActivity)) {
+                if (!ModelManager.isSpeechReady(this@MainActivity, prefs.accurate)) {
                     progress.isIndeterminate = false
                     status.text = getString(R.string.downloading_speech, 0)
-                    ModelManager.downloadSpeechModels(this@MainActivity) { percent ->
+                    ModelManager.downloadSpeechModels(this@MainActivity, prefs.accurate) { percent ->
                         progress.progress = percent
                         status.text = getString(R.string.downloading_speech, percent)
                     }
@@ -150,7 +160,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 status.text = getString(R.string.ready)
-                launchCapturePrompt()
+                if (prefs.useMicrophone) startMicrophoneMode() else launchCapturePrompt()
             } catch (e: Exception) {
                 status.text = getString(R.string.download_failed, e.message ?: e.javaClass.simpleName)
             } finally {
@@ -158,6 +168,14 @@ class MainActivity : AppCompatActivity() {
                 setBusy(false)
             }
         }
+    }
+
+    private fun startMicrophoneMode() {
+        ContextCompat.startForegroundService(
+            this, Intent(this, CaptionService::class.java).setAction(CaptionService.ACTION_START_MIC)
+        )
+        status.text = getString(R.string.running)
+        moveTaskToBack(true)
     }
 
     private fun launchCapturePrompt() {
@@ -175,6 +193,8 @@ class MainActivity : AppCompatActivity() {
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         startButton.isEnabled = !busy
         languageSpinner.isEnabled = !busy
+        speedGroup.isEnabled = !busy
+        sourceGroup.isEnabled = !busy
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()

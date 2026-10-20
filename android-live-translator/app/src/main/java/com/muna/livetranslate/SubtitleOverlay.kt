@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -24,8 +25,16 @@ class SubtitleOverlay(private val context: Context, textSizeSp: Int) {
     private val handler = Handler(Looper.getMainLooper())
     private val hide = Runnable { box.visibility = View.GONE }
 
-    private val previousLine = subtitleText(textSizeSp * 0.8f).apply { alpha = 0.7f }
-    private val currentLine = subtitleText(textSizeSp.toFloat())
+    private val previousLine = subtitleText(textSizeSp * 0.8f).apply {
+        alpha = 0.7f
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
+    }
+    // Never cover the video controls: show at most 3 lines.
+    private val currentLine = subtitleText(textSizeSp.toFloat()).apply {
+        maxLines = 3
+        ellipsize = TextUtils.TruncateAt.END
+    }
 
     private val box = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL

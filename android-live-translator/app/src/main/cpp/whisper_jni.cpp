@@ -51,10 +51,12 @@ Java_com_muna_livetranslate_WhisperEngine_nativeTranscribe(
     p.print_timestamps = false;
     p.suppress_blank = true;
     p.suppress_nst = true;
-    // No temperature fallback: a low-confidence phrase would otherwise be decoded up to 5 more times.
-    p.temperature_inc = 0.0f;
+    // At most two retries, and only when Whisper itself detects a bad decode (e.g. a repetition loop).
+    p.temperature_inc = 0.5f;
     p.greedy.best_of = 1;
-    p.max_tokens = 96;
+    // Speech is ~3 words/s: cap the output to what the clip can contain, so a loop cannot run on.
+    const int seconds = n / 16000 + 1;
+    p.max_tokens = seconds * 8 + 8;
     // Short clips: shrink the encoder window (30 s by default) for much faster results.
     const int audioCtx = n / 320 + 128;
     p.audio_ctx = audioCtx < 1500 ? audioCtx : 0;

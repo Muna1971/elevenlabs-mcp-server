@@ -343,7 +343,7 @@ class CaptionService : Service() {
 
     /** Removes sound tags such as "[Music]" and Whisper's typical silence hallucinations. */
     private fun cleanUp(raw: String): String? {
-        val text = raw.replace(SOUND_TAGS, " ").replace(Regex("\\s+"), " ").trim()
+        val text = RepetitionFilter.clean(raw.replace(SOUND_TAGS, " ").replace(Regex("\\s+"), " ").trim())
         if (text.length < 2 || text.none { it.isLetter() }) return null
         val lower = text.lowercase(Locale.ROOT)
         if (HALLUCINATIONS.any { it in lower }) return null

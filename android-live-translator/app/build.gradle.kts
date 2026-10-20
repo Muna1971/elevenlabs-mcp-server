@@ -14,6 +14,8 @@ android {
         versionCode = 2
         versionName = "2.0"
         ndk { abiFilters += listOf("arm64-v8a") }
+        // Only our JNI library; skip the command-line tools bundled with third-party projects.
+        externalNativeBuild { cmake { targets += "nativecore" } }
     }
 
     externalNativeBuild {
